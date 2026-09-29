@@ -1,0 +1,16 @@
+# The Python Selenium suite. Install with:
+#     python -m venv .venv && .venv/bin/pip install -r requirements.txt
+#
+# Selenium 4.27 matches the version the Java suite ran on, so the WebDriver
+# behaviour is identical - only the binding language changed.
+selenium==4.27.1
+
+pytest==8.3.4
+# Runs the classes in the order testng.xml declared. pytest's own default is
+# alphabetical by file, which is why the test files are numbered - but the
+# ordering plugin makes the intent explicit rather than relying on filenames.
+pytest-order==1.3.0
+# Two-hour runs benefit from seeing which test is slow.
+pytest-timeout==2.3.1
+# A readable HTML report, the closest equivalent to the surefire report.
+pytest-html==4.1.1
