@@ -28,10 +28,13 @@ an honest caveat when the cache is stale.
 
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 import pytest
 
 from awnic_qa.base_test import BaseTest
 from awnic_qa.pages.customer_records_page import CustomerRecordsPage
+from awnic_qa.pages.reports_page import ReportsPage
 
 #: Priority from QA/qa-priority-test-matrix.md:
 #:   B-P1 'Customer records lookup (/tickets/{id}/customer-records)'
@@ -57,6 +60,21 @@ class TestCustomerRecords(BaseTest):
         self.detail.open_tab("Customer & Records")
         self.customer_records.wait_until_loaded()
 
+    def open_overview_of_first_ticket(self, list_path: str = "/tickets/enquiries") -> None:
+        """
+        Opens the first ticket and stays on its OVERVIEW - where CustomerHistoryPanel lives
+        (TicketDetailContent.tsx). The three history tests used to look for it on Customer &
+        Records, where it is not rendered at all.
+        """
+        self.require_ticket_access()
+        self.open(list_path)
+        self.list.wait_until_loaded()
+        if self.list.get_row_count() == 0:
+            pytest.skip(f"No tickets on {list_path}, so there is no history to open.")
+        self.list.open_first_row()
+        self.wait_for_ticket_detail_url()
+        self.detail.wait_until_loaded()
+
     # ==================================================================
     # The tab exists on every ticket type
     # ==================================================================
@@ -64,7 +82,6 @@ class TestCustomerRecords(BaseTest):
 
     @pytest.mark.phase1
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_tab_always_arrives_in_one_of_its_four_legitimate_shapes(self):
         """
         M13-POS / M13-NEG together: the tab must never render as blank space.
@@ -92,7 +109,6 @@ class TestCustomerRecords(BaseTest):
 
     @pytest.mark.phase1
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_three_record_cards_are_all_shown_when_records_exist(self):
         """M13-POS: 'The policy information returned is the information agents actually need'."""
         self.open_records_of_first_ticket()
@@ -112,7 +128,6 @@ class TestCustomerRecords(BaseTest):
 
     @pytest.mark.phase1
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_an_empty_record_table_says_which_kind_of_record_is_missing(self):
         """
         M13-NEG: an empty table names what it found none of.
@@ -140,7 +155,6 @@ class TestCustomerRecords(BaseTest):
 
     @pytest.mark.phase1
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_a_multi_policy_customer_shows_every_policy(self):
         """M13-POS: 'A customer with several policies shows all of them'."""
         self.open_records_of_first_ticket()
@@ -178,7 +192,6 @@ class TestCustomerRecords(BaseTest):
 
     @pytest.mark.phase1
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_a_failed_lookup_is_reported_as_an_error_not_as_no_records(self):
         """
         M13-NEG, and the most valuable test in this class:
@@ -203,7 +216,6 @@ class TestCustomerRecords(BaseTest):
 
     @pytest.mark.phase1
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_stale_cached_records_carry_an_honest_caveat(self):
         """
         M13-EDG: 'Customer details that changed at the source are refreshed' - the honest half.
@@ -226,10 +238,9 @@ class TestCustomerRecords(BaseTest):
 
     @pytest.mark.phase2
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_customers_previous_cases_are_shown_in_one_place(self):
         """M13-POS: 'All of a customer's previous cases are shown in one place'."""
-        self.open_records_of_first_ticket()
+        self.open_overview_of_first_ticket()
 
         if not self.customer_records.has_history_panel():
             pytest.skip(
@@ -247,10 +258,9 @@ class TestCustomerRecords(BaseTest):
 
     @pytest.mark.phase2
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_a_past_case_in_the_history_opens_when_clicked(self):
         """M13-POS: 'Clicking a past case opens it'."""
-        self.open_records_of_first_ticket()
+        self.open_overview_of_first_ticket()
 
         if not self.customer_records.has_history_panel():
             pytest.skip("No Customer History panel on this ticket.")
@@ -269,7 +279,6 @@ class TestCustomerRecords(BaseTest):
 
     @pytest.mark.phase1
     @pytest.mark.quarantine("no-failing-path")
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_history_covers_both_enquiries_and_complaints(self):
         """
         M13-EDG: 'A customer's history includes both enquiries and complaints'.
@@ -277,7 +286,7 @@ class TestCustomerRecords(BaseTest):
         A history that silently showed only one type would let an agent miss that the same
         person has an open complaint while they are answering their enquiry.
         """
-        self.open_records_of_first_ticket()
+        self.open_overview_of_first_ticket()
 
         if not self.customer_records.has_history_panel():
             pytest.skip("No Customer History panel on this ticket.")
@@ -325,3 +334,116 @@ class TestCustomerRecords(BaseTest):
             f"On screen: {self.page_text_snippet()}"
         )
 
+
+    # ==================================================================
+    # R22 - the Customer History MODULE (/history), Phase 2
+    # ==================================================================
+    # The two phase-2 tests above cover the per-ticket CustomerHistoryPanel. These cover the
+    # standalone module (app/history/page.tsx + HistorySearch.tsx) and who may not use it.
+
+    def a_ticket_with_a_policy(self) -> tuple[str, str, str]:
+        """(reference, policy number, customer name) of the first enquiry that HAS a policy."""
+        self.open("/tickets/enquiries")
+        self.list.wait_until_loaded()
+        references = self.list.get_reference_numbers()
+        policies = self.list.get_column_values("Policy Number")
+        names = self.list.get_column_values("Customer Name")
+        for reference, policy, name in zip(references, policies, names):
+            if reference and policy and policy != "—":
+                return reference, policy, "" if name == "—" else name
+        pytest.skip("No enquiry on the first page carries a policy number to look up.")
+
+    @pytest.mark.phase2
+    @pytest.mark.regression
+    @pytest.mark.p1
+    def test_r22_the_history_module_shows_a_customers_tickets_grouped_and_on_a_timeline(self):
+        """
+        R22. /history lands on "Customer History" with the customer search (HistorySearch.tsx,
+        "Search a customer — policy number, claim number, phone, or name"). Picking a customer
+        navigates to /history?policy=... (lib/customers.ts customerHistoryHref); the page then
+        shows that customer (h1 = their name), a Grouped view by default with the
+        CustomerHistoryGrouped sections, and a Timeline view - and the ticket the policy was
+        read from is among them.
+
+        The policy is taken from a real ticket and opened through the module's own URL contract
+        rather than typed into the search: the search box calls the live Data Mart lookup (which
+        also writes the lookup cache and an audit row), and this test must stay read-only.
+        """
+        self.require_ticket_access()
+        self.open_and_wait("/history")
+        assert self.reports.get_heading() == "Customer History"
+        assert self.reports.has_history_search(), "The module should offer the customer search"
+
+        reference, policy, name = self.a_ticket_with_a_policy()
+        self.open_and_wait(f"/history?{urlencode({'policy': policy})}")
+        self.wait_for_page_content()
+
+        heading = self.reports.get_heading()
+        assert heading != "Customer History", "A customer's page should be titled with their name"
+        if name:
+            assert heading == name, (
+                f"Policy {policy} belongs to '{name}' on {reference}, but the page is for '{heading}'"
+            )
+        assert self.reports.history_view_is("Grouped"), "Grouped should be the default view"
+        groups = self.reports.history_group_labels()
+        assert groups and set(groups) <= set(ReportsPage.HISTORY_GROUPS), (
+            f"The grouped view should show its type sections, got {groups}"
+        )
+        self.reports.expand_all_history_groups()
+        grouped = self.reports.history_references()
+        assert reference in grouped, (
+            f"{reference} carries policy {policy}, so it must be in that customer's history. "
+            f"Listed: {grouped}"
+        )
+
+        self.reports.switch_history_view("Timeline")
+        timeline = self.reports.history_references()
+        assert sorted(timeline) == sorted(grouped), (
+            "Timeline and Grouped are two layouts of the SAME tickets. "
+            f"Grouped: {sorted(grouped)}, Timeline: {sorted(timeline)}"
+        )
+
+    @pytest.mark.phase2
+    @pytest.mark.regression
+    @pytest.mark.p1
+    @pytest.mark.rbac
+    @pytest.mark.negative
+    def test_r22_a_complaint_handler_is_not_offered_the_customer_history_module(self):
+        """
+        R22. VIEW_CUSTOMER_HISTORY is granted to every ticket-viewing role EXCEPT
+        complaint_handler (app/teams/seed_data.py: "a customer's whole footprint is a broader
+        disclosure than one scoped ticket"), and SideNav's "Customer History" item requires it.
+        The /history page refusal itself is a cell of test_15_role_matrix, not repeated here.
+        """
+        self.login_once(self.get("complaintHandlerEmail"))
+        self.open_and_wait("/tickets/complaints")
+        self.nav.wait_until_loaded()
+        assert not self.nav.has_item("Customer History"), (
+            "A complaint handler must not be offered the Customer History module"
+        )
+
+    @pytest.mark.phase2
+    @pytest.mark.regression
+    @pytest.mark.p1
+    @pytest.mark.rbac
+    @pytest.mark.negative
+    def test_r22_a_complaint_handlers_ticket_shows_no_customer_history_panel(self):
+        """
+        R22. The ticket page fetches and renders CustomerHistoryPanel only for
+        canViewCustomerHistory (app/tickets/[id]/page.tsx showHistory), so a complaint handler's
+        own complaint carries no Customer History card.
+        """
+        self.login_once(self.get("complaintHandlerEmail"))
+        self.open("/tickets/complaints")
+        self.list.wait_until_loaded()
+        if self.list.get_row_count() == 0 or self.list.is_empty_state_displayed():
+            pytest.skip(
+                f"{self.get('complaintHandlerEmail')} has no complaint assigned on UAT "
+                "(own-assigned scope), so there is no ticket to check the panel's absence on."
+            )
+        self.list.open_first_row()
+        self.wait_for_ticket_detail_url()
+        self.detail.wait_until_loaded()
+        assert not self.customer_records.has_history_panel(), (
+            "The Customer History panel must not render for a complaint handler"
+        )

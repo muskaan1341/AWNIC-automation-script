@@ -311,10 +311,10 @@ class BaseTest:
         nothing whatsoever about the real problem. That single cause produced most of the
         red in the 2026-09-03 run.
 
-        On the shared environment as of 2026-09-04, FIVE of the seven test accounts are in
+        On the shared environment as of 2026-09-04, FIVE of the seven test accounts were in
         this state - supervisor, hod, complaints.manager, complaints.officer and compliance
-        all have zero rows in user_roles. The roles themselves are configured correctly; it
-        is only the grant to these accounts that is missing.
+        all had zero rows in user_roles. (Re-checked 2026-09-30: the settings file now names
+        role-holding accounts for everything except compliance_officer, which has no holder.)
 
         Call this straight after signing in, before opening the screen under test. With no
         argument it asks about whoever is signed in right now.

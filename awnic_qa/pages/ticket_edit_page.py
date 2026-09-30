@@ -68,7 +68,38 @@ class TicketEditPage(BasePage):
     def cancel(self) -> None:
         self.click(self.CANCEL_BUTTON)
 
+    #: The complaint cascade, as edit-form field keys (TicketEditForm.tsx CASCADE.Complaint,
+    #: less sub_product_line, which is hidden where the taxonomy offers nothing for it).
+    COMPLAINT_CASCADE_BELOW_DEPARTMENT = [
+        "product_line",
+        "complaint_category",
+        "complaint_type",
+        "complaint_sub_type",
+    ]
+
+    def choose_garage_sub_type_path(self, motor_department: str, garage_sub_types: list[str]) -> str:
+        """Department = Motor Claims, then the first taxonomy path down to a garage sub-type."""
+        self.choose("department", motor_department)
+        return self.choose_cascade_path_to(
+            [self.field(key) for key in self.COMPLAINT_CASCADE_BELOW_DEPARTMENT],
+            garage_sub_types,
+        )
+
+    def options_of(self, field_key: str) -> list[str]:
+        """A dropdown's options, once the form's async taxonomy fetch has landed."""
+        return self.read_dropdown_options_when_loaded(self.field(field_key))
+
     # ---------- CHECKS ----------
+
+    #: EditCustomerSection.tsx - its <h2> and the optional Data Mart shortcut.
+    CUSTOMER_SECTION = (By.XPATH, "//section//h2[normalize-space()='Customer Details']")
+    DATA_MART_LOOKUP = "Look up in Data Mart"
+
+    def has_customer_section(self) -> bool:
+        return self.exists(self.CUSTOMER_SECTION)
+
+    def is_field_editable(self, field_key: str) -> bool:
+        return self.driver.find_element(*self.field(field_key)).is_enabled()
 
     def is_field_present(self, field_key: str) -> bool:
         return self.exists(self.field(field_key))

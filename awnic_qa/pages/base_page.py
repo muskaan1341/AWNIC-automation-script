@@ -550,6 +550,47 @@ class BasePage:
             for option in Select(self.wait_visible(locator)).options
         ]
 
+    def read_dropdown_options_when_loaded(self, trigger: Locator) -> list[str]:
+        """
+        read_dropdown_options(), polled until it offers something (up to the normal timeout).
+
+        For a dropdown fed by a fetch that starts on mount - the create and edit forms load the
+        classification taxonomy asynchronously (NewTicketForm's Promise.all, TicketEditForm's
+        getComplaintTaxonomyPaths) - reading it the instant the form appears returns [] and a
+        test would wrongly conclude "not configured here". Still returns [] if nothing arrives.
+        """
+        try:
+            return self.wait.until(lambda d: self.read_dropdown_options(trigger) or False)
+        except TimeoutException:
+            return []
+
+    def choose_cascade_path_to(self, triggers: list[Locator], wanted: list[str]) -> str:
+        """
+        Walks a cascade of dropdowns (parent -> child) until the LAST one offers a value in
+        `wanted`, leaving that path selected. Returns the value chosen, or "" if no path leads
+        to one.
+
+        Exists so a test can reach a rule-bearing leaf (e.g. a garage complaint sub-type)
+        without hard-coding the taxonomy path above it: the path is discovered from whatever
+        the environment's taxonomy offers, depth-first, in the order the dropdowns list it.
+        """
+
+        def walk(level: int) -> str:
+            options = self.read_dropdown_options(triggers[level])
+            if level == len(triggers) - 1:
+                hit = next((o for o in options if o in wanted), "")
+                if hit:
+                    self.choose_option(triggers[level], hit)
+                return hit
+            for option in options:
+                self.choose_option(triggers[level], option)
+                hit = walk(level + 1)
+                if hit:
+                    return hit
+            return ""
+
+        return walk(0)
+
     def read_dropdown_options(self, trigger: Locator) -> list[str]:
         """
         Every option a dropdown offers, without choosing any of them.

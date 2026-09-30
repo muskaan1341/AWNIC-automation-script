@@ -56,6 +56,36 @@ class NewTicketPage(BasePage):
     # are the exact sentences the form is supposed to produce, so the tests assert on them
     # rather than only on the disabled button - a form that blocks you with the WRONG
     # explanation is still a form nobody can get past.
+    # ------------------------------------------------------------------
+    # R24 / R32 - conditional fields and the section layout (NewTicketForm.tsx)
+    # ------------------------------------------------------------------
+    #: "Garage Name" is asked for only on these two complaint sub-types (GARAGE_SUB_TYPES,
+    #: NewTicketForm.tsx ~L64; the edit form's lib/ticketEdit.ts keeps the same list).
+    GARAGE_SUB_TYPES = ["Garage Repair Delay", "Garage Repair Quality Issues"]
+    #: "Vehicle Plate" is asked for only when the complaint's department is this one
+    #: (NewTicketForm.tsx ~L642, ticketEdit.ts MOTOR_DEPARTMENT).
+    MOTOR_DEPARTMENT = "Motor Claims"
+    WALK_IN = "Walk-in"
+    #: The form's section cards, top to bottom (the Card titles in NewTicketForm.tsx).
+    SECTION_TITLES = [
+        "Customer Details",
+        "Ticket Information",
+        "Priority & Severity",
+        "Assignment",
+        "Internal Notes",
+    ]
+    #: Step 1 of NewTicketFlow.tsx - the page heading and the invitation above the search.
+    STEP_ONE_HEADING = "New Ticket"
+    STEP_ONE_PROMPT = "Let's create a new ticket"
+    #: Complaint cascade from Department down to Complaint Sub-Type. Sub-Product Line is left
+    #: out: it only renders where the taxonomy has values for the chosen product line.
+    COMPLAINT_CASCADE_BELOW_DEPARTMENT = [
+        "Product Line",
+        "Complaint Category",
+        "Complaint Type",
+        "Complaint Sub-Type",
+    ]
+
     BAD_EMAIL_MESSAGE = "Enter a valid email address"
     BAD_PHONE_MESSAGE = "Enter a valid phone number"
 
@@ -182,6 +212,10 @@ class NewTicketPage(BasePage):
     def get_dropdown_options(self, field_label: str) -> list[str]:
         return self.read_dropdown_options(self.dropdown_for(field_label))
 
+    def get_loaded_dropdown_options(self, field_label: str) -> list[str]:
+        """get_dropdown_options() after the form's async taxonomy fetch has landed."""
+        return self.read_dropdown_options_when_loaded(self.dropdown_for(field_label))
+
     def fill(self, field_label: str, text: str) -> None:
         self.type_into(self.input_for(field_label), text)
 
@@ -251,6 +285,50 @@ class NewTicketPage(BasePage):
         self.select_first_option("Priority")
         self.fill("Alternate Email", customers.QA_CONTACT_EMAIL)
         self.fill("Alternate Mobile", scenario.customer.mobile)
+
+    def choose_garage_sub_type_path(self) -> str:
+        """
+        Motor Claims, then whatever Product Line / Category / Type path leads to a garage
+        sub-type on this environment's taxonomy. Returns the sub-type picked ("" if none).
+        """
+        self.select_option("Department", self.MOTOR_DEPARTMENT)
+        return self.choose_cascade_path_to(
+            [self.dropdown_for(label) for label in self.COMPLAINT_CASCADE_BELOW_DEPARTMENT],
+            self.GARAGE_SUB_TYPES,
+        )
+
+    def first_non_garage_sub_type(self) -> str:
+        """Another sub-type offered under the SAME type, "" if the garage ones are all."""
+        return next(
+            (
+                o
+                for o in self.get_dropdown_options("Complaint Sub-Type")
+                if o not in self.GARAGE_SUB_TYPES
+            ),
+            "",
+        )
+
+    def section_titles(self) -> list[str]:
+        """
+        The known section cards on screen, top to bottom.
+
+        Read through textContent, not .text: the Card title is styled `uppercase`, so .text
+        returns "CUSTOMER DETAILS" while the DOM - and NewTicketForm.tsx - say "Customer
+        Details".
+        """
+        titles = [
+            (h.get_attribute("textContent") or "").strip()
+            for h in self.driver.find_elements(By.TAG_NAME, "h3")
+        ]
+        return [t for t in titles if t in self.SECTION_TITLES]
+
+    def is_on_customer_search_step(self) -> bool:
+        """Step 1: the "New Ticket" heading, the customer search box, no form yet."""
+        return (
+            self.exists((By.XPATH, f"//h1[normalize-space()='{self.STEP_ONE_HEADING}']"))
+            and self.is_customer_search_displayed()
+            and not self.exists(self.FORM_LANDMARK)
+        )
 
     # ==================================================================
     # Checks

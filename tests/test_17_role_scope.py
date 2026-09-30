@@ -45,7 +45,6 @@ ORG_WIDE_ACCOUNTS = [users.CC_AGENT, users.HOD_BROKER_MOTOR]
 ROLELESS_ACCOUNTS = [
     users.UNGRANTED_HOD,
     users.UNGRANTED_COMPLAINTS_MANAGER,
-    users.UNGRANTED_COMPLAINT_HANDLER,
     users.UNGRANTED_COMPLIANCE,
 ]
 
@@ -198,9 +197,10 @@ class TestRoleScope(BaseTest):
     # ==================================================================
 
     @pytest.mark.xfail(
-        reason="complaint_handler and compliance_officer have no holder in user_roles on "
-        "this environment, so neither role can be exercised by any test. Missing seed "
-        "data, not a product fault - grant the roles and this turns green.",
+        reason="compliance_officer has no holder in user_roles on UAT (re-checked "
+        "2026-09-30; complaint_handler is now held by complaints.officer@awnic.ae), so that "
+        "role cannot be exercised by any test. Missing seed data, not a product fault - "
+        "grant the role and this turns green.",
         strict=False,
     )
     @pytest.mark.env_check

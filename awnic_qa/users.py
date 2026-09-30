@@ -44,8 +44,10 @@ exercised two different agents. If a settings file names an email that is not in
 _KNOWN_ACCOUNTS, collection stops with a message saying so - add the real role and
 department there; never guess them.
 
-TWO ROLES HAVE NO HOLDER AT ALL on this environment: complaint_handler and
-compliance_officer. Every test that needs one can only skip. See ROLE_HAS_NO_HOLDER.
+ONE ROLE HAS NO HOLDER AT ALL on UAT: compliance_officer (re-checked 2026-09-30 by a
+read-only SELECT on user_roles - zero holders). complaint_handler is now held by
+complaints.officer@awnic.ae and cc_supervisor by supervisor-gen@awnic.com (the old
+supervisor@awnic.ae placeholder no longer exists there). See ROLE_HAS_NO_HOLDER.
 """
 
 from __future__ import annotations
@@ -73,7 +75,7 @@ DEPT_POC = "dept_poc"
 
 #: Nobody on this environment holds these, so a test that needs one has nothing to sign in
 #: as. Skip with a sentence saying so - do not fail, and do not quietly use a different role.
-ROLE_HAS_NO_HOLDER = frozenset({COMPLAINT_HANDLER, COMPLIANCE_OFFICER})
+ROLE_HAS_NO_HOLDER = frozenset({COMPLIANCE_OFFICER})
 
 
 @dataclass(frozen=True)
@@ -99,9 +101,10 @@ class Account:
 # ======================================================================
 # The seeded @awnic.ae accounts (scripts/seed_demo.py)
 # ======================================================================
-# THREE OF THE SEVEN HAVE NO ROW IN user_roles. They sign in perfectly well and then see
-# "You don't have access to..." on every screen. That is missing seed data on this
-# environment, not a product fault - grant the role and the tests become meaningful.
+# On a LOCAL seed these all exist. On UAT (read-only SELECT, 2026-09-30): supervisor@,
+# hod@, complaints.manager@ and compliance@awnic.ae do NOT exist at all; admin@awnic.ae holds
+# admin; complaints.officer@awnic.ae holds complaint_handler. The UAT settings file therefore
+# names supervisor-gen@awnic.com for cc_supervisor, and real staff for HOD / manager.
 
 #: Role and department for every email a settings file may name, keyed by email. The EMAIL
 #: itself always comes from the settings file (see _configured_account); this table only
@@ -112,6 +115,10 @@ _KNOWN_ACCOUNTS: dict[str, tuple[str, str | None, str | None]] = {
     "agent@awnic.ae": ("Aisha Rahman", CC_INITIATOR, None),
     "a_hassouna@awnic.com": ("Ahmed Nabil Saad Hassouna", CC_INITIATOR, None),
     "supervisor@awnic.ae": ("Omar Farooq", CC_SUPERVISOR, None),
+    # UAT's only cc_supervisor holder - read-only SELECT on user/user_roles, 2026-09-30.
+    "supervisor-gen@awnic.com": ("Supervisor-General Inquiry", CC_SUPERVISOR, None),
+    # Holds complaint_handler on UAT since 2026-09-30 (same read-only check); no department.
+    "complaints.officer@awnic.ae": ("Leila Nasser", COMPLAINT_HANDLER, None),
     "v_mertia@awnic.com": ("Vikrant Mertia", HEAD_OF_DEPARTMENT, "Broker & Motor Underwriting"),
     "c_chiong@awnic.com": ("Cindy Chiong", MANAGER, "Business Support"),
     "a_shalaby@awnic.com": ("Ahmed Mohamed Shalaby", DEPT_POC, "Medical Operations"),
@@ -139,11 +146,13 @@ def _configured_account(setting_key: str) -> Account:
 PLATFORM_ADMIN = _configured_account("adminEmail")
 CC_AGENT = _configured_account("agentEmail")
 CC_SUPERVISOR_ACCOUNT = _configured_account("supervisorEmail")
+COMPLAINT_HANDLER_ACCOUNT = _configured_account("complaintHandlerEmail")
 
-# Seeded, sign in fine, hold NO role - every screen refuses them.
+# Seeded placeholders meant to hold NO role. On UAT (2026-09-30) none of these three exists
+# at all, so there is still no role-less account to prove fail-closed with. The fourth,
+# complaints.officer@awnic.ae, was dropped from this list: it now holds complaint_handler.
 UNGRANTED_HOD = Account("hod@awnic.ae", "Hana Al Dhaheri", None, None)
 UNGRANTED_COMPLAINTS_MANAGER = Account("complaints.manager@awnic.ae", "Marwan Haddad", None, None)
-UNGRANTED_COMPLAINT_HANDLER = Account("complaints.officer@awnic.ae", "Leila Nasser", None, None)
 UNGRANTED_COMPLIANCE = Account("compliance@awnic.ae", "Yusuf Kareem", None, None)
 
 # ======================================================================
@@ -213,7 +222,7 @@ ALL: tuple[Account, ...] = (
     CC_SUPERVISOR_ACCOUNT,
     UNGRANTED_HOD,
     UNGRANTED_COMPLAINTS_MANAGER,
-    UNGRANTED_COMPLAINT_HANDLER,
+    COMPLAINT_HANDLER_ACCOUNT,
     UNGRANTED_COMPLIANCE,
     HOD_BROKER_MOTOR,
     MANAGER_BUSINESS_SUPPORT,

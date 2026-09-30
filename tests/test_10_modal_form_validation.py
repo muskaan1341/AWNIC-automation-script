@@ -47,7 +47,8 @@ class TestModalFormValidation(BaseTest):
     def open_action_menu_on_first_enquiry(self, role_key: str) -> None:
         """Opens the first enquiry and its More Action menu, or skips with the reason."""
         # Deployed environments can have an account that signs in fine but holds NO ROLE
-        # (config.deployed.properties: "NO ACCOUNT HOLDS cc_supervisor after the clean"). Without
+        # (UAT had no cc_supervisor holder until 2026-09-30; supervisor-gen@awnic.com now holds it,
+        # but compliance_officer still has none). Without
         # this, every test here waits out the full timeout on a heading that is never coming and
         # fails with "waiting for visibility of element located by By.tagName: h1" — which says
         # nothing about the real cause. Skip with the reason instead.
@@ -57,10 +58,9 @@ class TestModalFormValidation(BaseTest):
         # reclassify tests (hodEmail) were being skipped or allowed on the supervisor's grants.
         self.login_once(self.get(role_key))
         self.require_ticket_access(role_key)
-        self.open("/tickets/enquiries")
-        self.list.wait_until_loaded()
-        self.list.open_first_row()
-        self.detail.wait_until_loaded()
+        # An OPEN ticket from the board, not the first list row - that row can be closed or held
+        # for duplicate review, where the whole header is frozen by design (seen 2026-09-30).
+        self.open_an_open_ticket_from("/tickets/enquiries")
 
         if not self.detail.has_more_action_menu():
             pytest.skip(
@@ -84,7 +84,6 @@ class TestModalFormValidation(BaseTest):
     # Sheet 06 - Reassign Ticket
     # ==================================================================
 
-    @pytest.mark.blocked("cc_supervisor")
     def test_reassign_asks_you_to_pick_somebody_rather_than_type_them_in(self):
         """
         WHAT REPLACED THE THREE OLD TESTS HERE, and why they could not simply be relabelled.
@@ -112,12 +111,9 @@ class TestModalFormValidation(BaseTest):
             "Reassign should open one of the two picker modals. Title: "
             f"{self.detail.get_modal_title()}"
         )
-        assert not self.detail.exists(self.detail.modal_field("Name")), (
-            "The free-text point-of-contact Name box was removed when the picker landed - a "
-            "reassignment is chosen from the list, not typed in"
-        )
-        assert not self.detail.exists(self.detail.modal_field("Email")), (
-            "The free-text point-of-contact Email box was removed at the same time"
+        assert not self.detail.has_removed_free_text_reassign_field(), (
+            "The free-text point-of-contact Name and Email boxes were removed when the picker "
+            "landed - a reassignment is chosen from the list, not typed in"
         )
         self.detail.close_modal()
 
@@ -154,7 +150,6 @@ class TestModalFormValidation(BaseTest):
     # Sheet 08b - Move to Discarded
     # ==================================================================
 
-    @pytest.mark.blocked("cc_supervisor")
     def test_discarding_refuses_to_act_with_no_reason_chosen(self):
         self.open_action("supervisorEmail", "Move to Discarded")
 
@@ -167,13 +162,17 @@ class TestModalFormValidation(BaseTest):
         self.detail.close_modal()
 
 
-    @pytest.mark.blocked("cc_supervisor")
     def test_restoring_as_a_complaint_needs_a_category_first(self):
         """
         Checklist: "Restoring as Complaint with no category selected -> 'Select a complaint
         category to continue.'" and "Restoring as Enquiry has no extra required field".
+
+        As the HEAD OF DEPARTMENT: Restore is gated on RECLASSIFY_TICKET_TYPE
+        (app/tickets/discarded/page.tsx canRestore), which cc_supervisor does not hold - the
+        supervisor is correctly offered only "View details". The confirm is pressed with no
+        category, which RestoreConfirmModal refuses client-side before any request.
         """
-        self.login_once(self.get("supervisorEmail"))
+        self.login_once(self.get("hodEmail"))
         self.open("/tickets/discarded")
         self.discarded.wait_until_loaded()
 

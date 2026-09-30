@@ -55,10 +55,21 @@ class DiscardedListPage(BasePage):
         self.click_button(level)
 
     def open_row_menu(self, row_index: int) -> None:
-        """Opens a row's action menu, which is where "Restore as …" lives."""
-        self.driver.find_elements(*self.TABLE_ROWS)[row_index].find_element(
-            By.CSS_SELECTOR, "button[aria-label='Row actions']"
-        ).click()
+        """
+        Opens a row's action menu, which is where "Restore as …" lives.
+
+        Through the shared click() rather than element.click(): the button sits at the right
+        edge of the table, under the notification toast stack, and a raw click was refused
+        ("Other element would receive the click: <p ... break-words pr-4>", the toast body) as
+        soon as an account with unread notifications (the HOD, 2026-09-30) used this list.
+        click() waits the toasts out and retries, exactly as it does for every other control.
+        """
+        self.click(
+            (
+                By.XPATH,
+                f"(//table/tbody/tr)[{row_index + 1}]//button[@aria-label='Row actions']",
+            )
+        )
 
     def click_restore_as(self, reference_type: str) -> None:
         """Picks "Restore as Enquiry" / "Restore as Complaint" from an open row menu."""

@@ -42,7 +42,8 @@ class TestKanban(BaseTest):
     def open_board(self) -> None:
         """Opens the enquiries list and switches it to the board."""
         # Deployed environments can have an account that signs in fine but holds NO ROLE
-        # (config.deployed.properties: "NO ACCOUNT HOLDS cc_supervisor after the clean"). Without
+        # (UAT had no cc_supervisor holder until 2026-09-30; supervisor-gen@awnic.com now holds it,
+        # but compliance_officer still has none). Without
         # this, every test here waits out the full timeout on a heading that is never coming and
         # fails with "waiting for visibility of element located by By.tagName: h1" — which says
         # nothing about the real cause. Skip with the reason instead.
@@ -65,7 +66,6 @@ class TestKanban(BaseTest):
     # ---------- the board itself ----------
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_board_shows_exactly_the_four_agreed_columns(self):
         self.open_board()
 
@@ -74,7 +74,6 @@ class TestKanban(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_each_column_header_count_matches_the_cards_below_it(self):
         self.open_board()
 
@@ -84,7 +83,6 @@ class TestKanban(BaseTest):
             )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_an_empty_column_explains_itself_instead_of_looking_broken(self):
         self.open_board()
 
@@ -97,7 +95,6 @@ class TestKanban(BaseTest):
         pytest.skip("Every column has cards, so there is no empty one to check.")
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_board_and_the_list_tell_the_same_story(self):
         self.open("/tickets/enquiries")
         self.list.wait_until_loaded()
@@ -119,7 +116,6 @@ class TestKanban(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_a_card_carries_enough_to_work_from_without_opening_it(self):
         """
         The card is a work surface, not a label: a handler triages from it without opening
@@ -152,7 +148,6 @@ class TestKanban(BaseTest):
     # ---------- who may move a card ----------
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_a_supervisor_has_cards_they_can_pick_up(self):
         """
         A supervisor may move tickets, so at least SOME card must be pickable.
@@ -238,7 +233,11 @@ class TestKanban(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
+    # 2026-09-30: the supervisor account exists now, but this test DRAGS a real card on the
+    # shared UAT board. Its drop is meant to be refused (New) or cancelled (Resolved box), yet a
+    # drop that lands one column off calls submitMove (KanbanBoard.tsx onDragEnd) - a real stage
+    # write. UAT runs are read-only, so it stays blocked there; run it on a local/seeded stack.
+    @pytest.mark.blocked("shared_uat_no_drag")
     def test_a_card_cannot_be_dragged_backwards_into_new(self):
         """
         "New" is a source, not a destination. The state machine refuses the move, so the card
@@ -291,7 +290,6 @@ class TestKanban(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_a_card_names_the_customer_it_belongs_to(self):
         """
         A card carries the customer's name, so a handler can triage the board at a glance.
@@ -348,7 +346,11 @@ class TestKanban(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
+    # 2026-09-30: the supervisor account exists now, but this test DRAGS a real card on the
+    # shared UAT board. Its drop is meant to be refused (New) or cancelled (Resolved box), yet a
+    # drop that lands one column off calls submitMove (KanbanBoard.tsx onDragEnd) - a real stage
+    # write. UAT runs are read-only, so it stays blocked there; run it on a local/seeded stack.
+    @pytest.mark.blocked("shared_uat_no_drag")
     def test_resolving_asks_for_resolution_details_first(self):
         """
         Nothing is ever resolved silently. Dropping onto Resolved opens a box that asks how it
@@ -384,7 +386,11 @@ class TestKanban(BaseTest):
         self.kanban.cancel_modal()
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
+    # 2026-09-30: the supervisor account exists now, but this test DRAGS a real card on the
+    # shared UAT board. Its drop is meant to be refused (New) or cancelled (Resolved box), yet a
+    # drop that lands one column off calls submitMove (KanbanBoard.tsx onDragEnd) - a real stage
+    # write. UAT runs are read-only, so it stays blocked there; run it on a local/seeded stack.
+    @pytest.mark.blocked("shared_uat_no_drag")
     def test_cancelling_the_resolve_box_leaves_the_ticket_where_it_was(self):
         self.login_once(self.get("supervisorEmail"))
         self.open_board()
@@ -415,7 +421,6 @@ class TestKanban(BaseTest):
     # ---------- clicking rather than dragging ----------
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_clicking_a_card_opens_its_ticket(self):
         self.login_once(self.get("supervisorEmail"))
         self.open_board()

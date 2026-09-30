@@ -133,8 +133,13 @@ class TestFormValidation(BaseTest):
         """
         self.open_complaint_form()
 
-        if not self.new_ticket.get_dropdown_options("Product Line"):
-            pytest.skip("No Product Line values are configured on this environment.")
+        # Product Line is filtered by the chosen DEPARTMENT (NewTicketForm.tsx productLines), so
+        # it is always empty until one is picked. This test used to read it straight away and
+        # skip every run with "No Product Line values are configured" - on a UAT whose complaint
+        # taxonomy IS seeded (2026-09-30). Pick a department first, as a person would.
+        self.new_ticket.select_first_option("Department")
+        if not self.new_ticket.get_loaded_dropdown_options("Product Line"):
+            pytest.skip("The first complaint department offers no Product Line on this environment.")
         self.new_ticket.select_first_option("Product Line")
 
         if not self.new_ticket.is_field_displayed("Sub-Product Line"):
@@ -154,10 +159,11 @@ class TestFormValidation(BaseTest):
         the form - or wherever Cancel lands - against the ticket it started from.
         """
         self.login_once(self.get("supervisorEmail"))
-        self.open("/tickets/enquiries")
-        self.list.wait_until_loaded()
-        self.list.open_first_row()
-        self.detail.wait_until_loaded()
+        self.require_ticket_access()
+        # An OPEN ticket from the board, not the first list row: on 2026-09-30 that row was
+        # held for duplicate review (every header action frozen by design), so all four edit
+        # tests skipped with "offers no actions" and never reached the form.
+        self.open_an_open_ticket_from("/tickets/enquiries")
 
         before = {"reference": self.detail.get_reference_number()}
         for label in read_first:
@@ -179,7 +185,6 @@ class TestFormValidation(BaseTest):
         self.edit_ticket.wait_until_loaded()
         return before
 
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_edit_form_opens_with_the_tickets_current_values(self):
         """
         WHAT THIS REPLACED: "the form has an email_subject OR a department field". Both are
@@ -213,7 +218,6 @@ class TestFormValidation(BaseTest):
             "A freshly opened form should not be complaining about anything yet"
         )
 
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_edit_form_rejects_a_malformed_email(self):
         """
         Checklist: "Malformed email in contact_email or alternate_email -> 'Enter a valid email address'".
@@ -240,7 +244,6 @@ class TestFormValidation(BaseTest):
             "...and keep us on the form rather than saving"
         )
 
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_edit_form_rejects_a_malformed_phone(self):
         """
         Checklist: "Malformed phone -> 'Enter a valid phone number'".
@@ -262,7 +265,6 @@ class TestFormValidation(BaseTest):
         )
         assert "/edit" in self.current_url(), "...and keep us on the form"
 
-    @pytest.mark.blocked("cc_supervisor")
     def test_cancelling_the_edit_returns_without_saving(self):
         """
         Cancel must leave without saving - and go back to THE SAME TICKET.

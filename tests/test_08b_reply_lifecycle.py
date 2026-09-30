@@ -50,7 +50,7 @@ from awnic_qa.pages.sla_page import SlaPage
 
 #: Priority from QA/qa-priority-test-matrix.md:
 #:   B-P1 the reply-driven lifecycle — the real path a ticket moves by
-pytestmark = [pytest.mark.p1, pytest.mark.phase1, pytest.mark.regression, pytest.mark.blocked("cc_supervisor")]
+pytestmark = [pytest.mark.p1, pytest.mark.phase1, pytest.mark.regression]
 
 
 _REFERENCE_SHAPE = re.compile(r"(INQ|COM|JNK)-\d{4}-\d+")
@@ -67,7 +67,8 @@ class TestReplyLifecycle(BaseTest):
         # Resolved or Closed ticket does not render at all - so opening "the first row" could
         # report "no composer" about a ticket nobody is supposed to reply to.
         # Deployed environments can have an account that signs in fine but holds NO ROLE
-        # (config.deployed.properties: "NO ACCOUNT HOLDS cc_supervisor after the clean"). Without
+        # (UAT had no cc_supervisor holder until 2026-09-30; supervisor-gen@awnic.com now holds it,
+        # but compliance_officer still has none). Without
         # this, every test here waits out the full timeout on a heading that is never coming and
         # fails with "waiting for visibility of element located by By.tagName: h1" — which says
         # nothing about the real cause. Skip with the reason instead.

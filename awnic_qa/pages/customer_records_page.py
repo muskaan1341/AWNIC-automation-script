@@ -73,8 +73,15 @@ class CustomerRecordsPage(BasePage):
     CLAIM_TABLE = (By.CSS_SELECTOR, "[data-testid='claim-table']")
     QUOTATION_TABLE = (By.CSS_SELECTOR, "[data-testid='quotation-table']")
 
-    #: The customer's own case history.
-    HISTORY_PANEL = (By.XPATH, "//*[normalize-space()='Customer History']")
+    #: The customer's own case history - CustomerHistoryPanel.tsx, a Card titled "Customer
+    #: History" rendered on the ticket's OVERVIEW tab (TicketDetailContent.tsx), not on Customer &
+    #: Records. Anchored on the card's <h3>: a bare text match also hit the side-nav "Customer
+    #: History" item, so the panel always "existed", and every a[href*='/tickets/'] on the page
+    #: (side nav, tabs) was read as a past case (found 2026-09-30, first supervisor run on UAT).
+    _HISTORY_CARD = (
+        "//h3[normalize-space()='Customer History']/ancestor::div[contains(@class,'rounded-lg')][1]"
+    )
+    HISTORY_PANEL = (By.XPATH, "//h3[normalize-space()='Customer History']")
     NO_OTHER_TICKETS = "No other tickets found for this customer."
 
     _TABLE_IDS = {
@@ -202,7 +209,9 @@ class CustomerRecordsPage(BasePage):
 
     def history_ticket_links(self) -> list:
         """Every past case the history offers as a link through to its ticket."""
-        return self.driver.find_elements(By.CSS_SELECTOR, "a[href*='/tickets/']")
+        return self.driver.find_elements(
+            By.XPATH, self._HISTORY_CARD + "//a[contains(@href,'/tickets/')]"
+        )
 
     def history_references(self) -> list[str]:
         """The reference numbers the history is showing, in the order it lists them."""

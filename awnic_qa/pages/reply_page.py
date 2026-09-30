@@ -19,6 +19,7 @@ person reply?" is answered by is_send_enabled(), never by whether the card is on
 from __future__ import annotations
 
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 
 from awnic_qa.pages.base_page import BasePage
 
@@ -38,7 +39,14 @@ class ReplyPage(BasePage):
     # Note also: components/ticket/ReplyBox.tsx has a "Type your reply here..." placeholder
     # and is NOT the component the app renders - nothing imports it but its own unit test.
     # Do not take locators from it.
-    COMPOSER = (By.CSS_SELECTOR, "textarea[aria-label='Write a reply to the customer']")
+    #
+    # And it is no longer a <textarea>: ReplyComposerField renders RichTextEditor (TipTap), whose
+    # editable surface is a contenteditable <div role="textbox" aria-label="Write a reply to the
+    # customer">. "Enabled" is therefore contenteditable="true" (setEditable(!disabled)), and
+    # the lock reason is the `title` on the editor's wrapper <div>, not on the box itself.
+    COMPOSER = (
+        By.CSS_SELECTOR, "[role='textbox'][aria-label='Write a reply to the customer']"
+    )
     SEND_BUTTON = (
         By.XPATH,
         "//button[normalize-space()='Send Reply' or normalize-space()='Sending…']",
@@ -53,9 +61,9 @@ class ReplyPage(BasePage):
         return self.exists(self.COMPOSER)
 
     def is_composer_enabled(self) -> bool:
-        return self.exists(self.COMPOSER) and self.driver.find_element(
-            *self.COMPOSER
-        ).is_enabled()
+        return self.exists(self.COMPOSER) and (
+            self.driver.find_element(*self.COMPOSER).get_attribute("contenteditable") == "true"
+        )
 
     def is_send_displayed(self) -> bool:
         return self.exists(self.SEND_BUTTON)
@@ -69,8 +77,10 @@ class ReplyPage(BasePage):
         """The tooltip that says WHY the composer is disabled - the lock reason, in words."""
         if not self.exists(self.COMPOSER):
             return ""
-        on_box = self.driver.find_element(*self.COMPOSER).get_attribute("title")
-        return on_box or ""
+        wrappers = self.driver.find_element(*self.COMPOSER).find_elements(
+            By.XPATH, "ancestor::div[@title][1]"
+        )
+        return (wrappers[0].get_attribute("title") or "") if wrappers else ""
 
     def names_the_sending_mailbox(self) -> bool:
         """The mailbox badge - replies go out from the watched alias, not the agent's own."""
@@ -98,7 +108,12 @@ class ReplyPage(BasePage):
         self.type_into(self.COMPOSER, text)
 
     def clear_reply(self) -> None:
-        self.clear_box(self.wait_visible(self.COMPOSER))
+        """Backspaces the editor empty (clear_box reads `value`, which a contenteditable lacks)."""
+        box = self.wait_visible(self.COMPOSER)
+        box.click()
+        box.send_keys(Keys.END)
+        for _ in range(len(box.text) + 1):
+            box.send_keys(Keys.BACK_SPACE)
 
     def press_send_reply(self) -> None:
         """

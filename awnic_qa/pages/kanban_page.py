@@ -70,6 +70,20 @@ class KanbanPage(BasePage):
     def wait_for_card_count(self, title: str, expected: int) -> None:
         self.wait.until(lambda d: len(self.cards_in(title)) == expected)
 
+    def card_links(self, columns: list[str] | None = None) -> list[tuple[str, str]]:
+        """
+        (reference, absolute ticket URL) for every card in these columns (default: all four),
+        read from the card's own reference link (KanbanCard.tsx: <Link href="/tickets/{id}">).
+        Lets a test visit many tickets from ONE board load instead of reloading a list per ticket.
+        """
+        pairs: list[tuple[str, str]] = []
+        for column in columns or self.COLUMNS:
+            for card in self.cards_in(column):
+                links = card.find_elements(By.CSS_SELECTOR, "a[href*='/tickets/']")
+                if links:
+                    pairs.append((links[0].text.strip(), links[0].get_attribute("href")))
+        return pairs
+
     def open_card(self, card) -> None:
         """Opens a card's ticket by clicking it (a click and a drag are told apart by distance)."""
         card.click()

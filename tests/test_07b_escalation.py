@@ -54,22 +54,22 @@ class TestEscalation(BaseTest):
         request.cls.login_class(request.cls.get("supervisorEmail"))
 
     def open_first_enquiry(self) -> None:
-        """Opens the first enquiry, or skips when the environment has none."""
+        """
+        Opens an OPEN enquiry from the board (New / In Progress), or skips when there is none.
+
+        Not "the first list row": on 2026-09-30 that row was held for duplicate review, where
+        the whole header is frozen by design (TicketHeaderActions hides Manual Escalation under
+        duplicateHoldActive), so both modal tests skipped with "No More Action menu" and never
+        reached the modal. A board card in an open column is the shared, reliable choice.
+        """
         self.require_ticket_access()
-        self.open("/tickets/enquiries")
-        self.list.wait_until_loaded()
-        if self.list.get_row_count() == 0:
-            pytest.skip("No enquiries on this environment, so there is nothing to escalate.")
-        self.list.open_first_row()
-        self.wait_for_ticket_detail_url()
-        self.detail.wait_until_loaded()
+        self.open_an_open_ticket_from("/tickets/enquiries")
 
     # ==================================================================
     # Who is offered the action at all
     # ==================================================================
 
     @pytest.mark.phase2
-    @pytest.mark.blocked("cc_supervisor")
     def test_escalating_without_choosing_an_action_is_refused(self):
         """
         The modal must not let you escalate without saying WHICH action you meant.
@@ -107,7 +107,6 @@ class TestEscalation(BaseTest):
         self.detail.close_modal()
 
     @pytest.mark.phase2
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_escalation_modal_can_always_be_cancelled_without_escalating(self):
         """
         Cancelling closes the modal AND leaves the ticket exactly as escalated as it was.
@@ -144,7 +143,6 @@ class TestEscalation(BaseTest):
     # ==================================================================
 
     @pytest.mark.phase1
-    @pytest.mark.blocked("cc_supervisor")
     def test_an_escalated_ticket_cannot_be_moved_by_hand(self):
         """
         An escalated ticket is owned by the escalation engine, not by a person dragging a card.
@@ -153,8 +151,8 @@ class TestEscalation(BaseTest):
         That stopped being true - UAT now carries escalated tickets - so the rule can be
         checked. On the board it is enforced by removing the drag handle altogether
         (KanbanDnd: `draggable = canMove && !isEscalated(ticket)`), so the oracle is:
-          * every card wearing the "Escalated ..." badge sits in Pending POC (the three
-            Escalated stages collapse into that column - app/stages/mapping.py) and has NO
+          * every card wearing the "Escalated ..." badge - in WHICHEVER column its stage puts
+            it, since escalation is a badge and not a column (app/stages/mapping.py) - has NO
             drag handle,
           * while a card of the same board that is NOT escalated does have one. That control
             is what makes the first half mean "locked because escalated" rather than "this
@@ -195,10 +193,13 @@ class TestEscalation(BaseTest):
                 "escalated card cannot be told apart from a board this user cannot move at all."
             )
 
-        misplaced = [(ref, col) for ref, col, _ in escalated if col != KanbanPage.PENDING_POC]
-        assert not misplaced, (
-            f"Escalated tickets belong in Pending POC. Found elsewhere: {misplaced}"
-        )
+        # NOT asserted any more: "every escalated card sits in Pending POC". That was a wrong
+        # oracle. The column follows the ticket's STAGE (app/stages/mapping.py STAGE_TO_COLUMN),
+        # and escalation is a breach_level BADGE, "never a column" (mapping.py:7-9) - the
+        # apps/api scanners raise breach_level without moving stage_id (state_machine.py module
+        # docstring). So a Tier-1-breached ticket escalates while still in New or In Progress;
+        # the first UAT run as the supervisor (2026-09-30) found 85 such cards, all correct.
+        # What the board DOES promise is below: an escalated card cannot be picked up.
         draggable = [ref for ref, _, can_drag in escalated if can_drag]
         assert not draggable, (
             f"Escalated tickets must not be draggable, but these can be picked up: {draggable}"

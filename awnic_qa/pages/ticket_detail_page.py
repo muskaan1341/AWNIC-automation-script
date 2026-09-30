@@ -10,10 +10,14 @@ A hand-typed enquiry therefore shows FOUR tabs, and that is CORRECT: the applica
 deliberately hides every AI surface on a ticket the AI never touched, so nobody mistakes an
 empty template for a real AI recommendation.
 
-ACTIONS all live behind one "More Action" menu (Edit / Reassign / Manual Escalation /
-Reclassify as … / Move to Discarded), each item gated on its own permission. The separate
-"Change Status" button is the only action outside the menu, and it disappears entirely on an
-escalated ticket and on a Resolved or Closed one.
+ACTIONS all live behind one "More Action" menu (Resolve / Edit / Reassign / Assign the Ticket /
+Manual Escalation / Reclassify as … / Move to Discarded), each item gated on its own permission
+(apps/web/src/app/tickets/[id]/TicketHeaderActions.tsx). There is NO standalone "Change Status"
+button any more (client requirement 1.24): In Progress is set automatically when the assigned CC
+Initiator opens the ticket, and the only manual status move left is "Resolve" inside the menu.
+Resolve is hidden on an escalated ticket; on a Complaint it routes to the Investigation &
+Resolution tab instead of opening a box. The Resolve box on an Inquiry is still
+StatusChangeConfirmModal, whose confirm button is still labelled "Change Status".
 """
 
 from __future__ import annotations
@@ -28,14 +32,23 @@ from awnic_qa.pages.base_page import BasePage, Locator
 #: Anchoring on the label and stepping to its sibling is how a field's value is read.
 _DETAIL_LABEL_XPATH = "//div[normalize-space(text())='{}']"
 
-#: Every modal form gives its controls a real id (reassign-poc-name, reassign-poc-email,
-#: manual-escalation-action, ...), which is the sturdiest locator there is. These helpers take
-#: the short name and add the prefix, so a test reads "Name" not the id.
+#: Every modal form gives its controls a real id, which is the sturdiest locator there is. These
+#: helpers take a short name, so a test reads "Assign to" not the id. Sources:
+#:   ManualEscalationModal.tsx  manual-escalation-action / -department / -target / -reason
+#:   AssignDeptPocModal.tsx     assign-mode ("Assign to") / assign-another-dept / assign-copy
 MODAL_FIELD_IDS = {
-    "Name": "reassign-poc-name",
-    "Email": "reassign-poc-email",
     "Action": "manual-escalation-action",
+    "Escalation department": "manual-escalation-department",
+    "Escalation target": "manual-escalation-target",
+    "Escalation reason": "manual-escalation-reason",
+    "Assign to": "assign-mode",
+    "Person in another department": "assign-another-dept",
+    "Copy": "assign-copy",
 }
+
+#: The free-text Reassign boxes REMOVED when the Reassign pickers landed (ReassignInitiatorModal /
+#: ReassignPocModal choose from a list). Kept only so a test can prove they have not come back.
+REMOVED_REASSIGN_FREE_TEXT_IDS = ("reassign-poc-name", "reassign-poc-email")
 
 
 class TicketDetailPage(BasePage):
@@ -52,7 +65,18 @@ class TicketDetailPage(BasePage):
     HEADING = (By.TAG_NAME, "h1")
     TAB_LINKS = (By.CSS_SELECTOR, "a[href*='/tickets/']")
     MORE_ACTION_BUTTON = (By.XPATH, "//button[normalize-space()='More Action']")
-    CHANGE_STATUS_BUTTON = (By.XPATH, "//button[normalize-space()='Change Status']")
+    #: The old header "Change Status" button - a button with that label OUTSIDE any dialog. The
+    #: Resolve confirm box's own button carries the same words, so the dialog is excluded.
+    LEGACY_CHANGE_STATUS_BUTTON = (
+        By.XPATH,
+        "//button[normalize-space()='Change Status'][not(ancestor::div[@role='dialog'])]",
+    )
+    RESOLVE_ITEM = "Resolve"
+    #: StatusChangeConfirmModal's title and confirm label.
+    RESOLVE_MODAL_TITLE = "Change status"
+    RESOLVE_CONFIRM = (
+        By.XPATH, "//div[@role='dialog']//button[normalize-space()='Change Status']"
+    )
     MENU_ITEMS = (
         By.CSS_SELECTOR,
         "[role='menu'] [role='menuitem'], [role='menu'] a, [role='menu'] button",
@@ -80,9 +104,6 @@ class TicketDetailPage(BasePage):
 
     def open_more_action_menu(self) -> None:
         self.click(self.MORE_ACTION_BUTTON)
-
-    def open_status_menu(self) -> None:
-        self.click(self.CHANGE_STATUS_BUTTON)
 
     def click_menu_item(self, label: str) -> None:
         self.click((By.XPATH, f"//*[@role='menu']//*[normalize-space()='{label}']"))
@@ -114,10 +135,8 @@ class TicketDetailPage(BasePage):
         return self.exists((By.CSS_SELECTOR, "div[role='dialog'] textarea"))
 
     def is_status_confirm_enabled(self) -> bool:
-        """True when the modal's "Change Status" button is usable."""
-        return self.driver.find_element(
-            By.XPATH, "//div[@role='dialog']//button[normalize-space()='Change Status']"
-        ).is_enabled()
+        """True when the Resolve box's confirm button ("Change Status") is usable."""
+        return self.driver.find_element(*self.RESOLVE_CONFIRM).is_enabled()
 
     # ---- fields inside a modal ----
 
@@ -253,8 +272,9 @@ class TicketDetailPage(BasePage):
     def has_more_action_menu(self) -> bool:
         return self.exists(self.MORE_ACTION_BUTTON)
 
-    def has_change_status_button(self) -> bool:
-        return self.exists(self.CHANGE_STATUS_BUTTON)
+    def has_legacy_change_status_button(self) -> bool:
+        """True if the REMOVED header "Change Status" button is back (it must not be)."""
+        return self.exists(self.LEGACY_CHANGE_STATUS_BUTTON)
 
     def get_open_menu_labels(self) -> list[str]:
         """Everything currently offered inside whichever menu is open."""
@@ -337,40 +357,29 @@ class TicketDetailPage(BasePage):
         )
 
     # ==================================================================
-    # Change Status - a MENU first, then a confirmation box
+    # Resolve - More Action -> Resolve -> a confirmation box (Inquiry only)
     # ==================================================================
     #
-    # "Change Status" is NOT a modal. It opens a small menu of the statuses this ticket is not
-    # already in ("In Progress" / "Pending Department POC" / "Resolved"), and only picking one
-    # of those opens the confirmation box. Treating it as a modal straight away waits forever
-    # on a dialog that has not been asked for yet.
-    #
-    # "Pending Department POC" is the exception worth knowing: if the ticket has no POC yet,
-    # picking it opens the POC PICKER instead of the plain confirmation - you cannot move a
-    # ticket to "waiting on the POC" without saying which POC.
+    # The old "Change Status" MENU (In Progress / Pending Department POC / Resolved) is gone.
+    # Resolve is the only manual status move, and it lives in More Action. On an Inquiry it
+    # opens StatusChangeConfirmModal (title "Change status", a Resolution note box, an unticked
+    # notify-customer checkbox, confirm "Change Status" disabled until a note is written). On a
+    # Complaint it navigates to /tickets/{id}/investigation?from=resolve instead.
 
-    def choose_new_status(self, status: str) -> None:
-        """Opens Change Status, picks a target, and waits for the confirmation box."""
-        self.open_status_menu()
-        self.click_menu_item(status)
-        self.wait_for_modal()
-
-    def confirm_status_change(self) -> None:
-        """Confirms the status change and waits for the box to close."""
-        self.click(
-            (
-                By.XPATH,
-                "//div[@role='dialog']//button[normalize-space()='Change Status']",
-            )
-        )
-        self.wait_gone(self.MODAL)
-
-    def get_offered_statuses(self) -> list[str]:
-        """The statuses currently offered - never includes the one the ticket is already in."""
-        self.open_status_menu()
-        offered = self.get_open_menu_labels()
+    def more_action_labels(self) -> list[str]:
+        """Every item More Action offers right now ([] when there is no menu). Closes it again."""
+        if not self.has_more_action_menu():
+            return []
+        self.open_more_action_menu()
+        labels = self.get_open_menu_labels()
         self._press_escape_on_menu()
-        return offered
+        self.wait_gone((By.CSS_SELECTOR, "[role='menu']"))
+        return labels
+
+    def open_resolve(self) -> None:
+        """More Action -> Resolve. On an Inquiry waits for the box; a Complaint navigates away."""
+        self.open_more_action_menu()
+        self.click_menu_item(self.RESOLVE_ITEM)
 
     def page_mentions(self, text: str) -> bool:
         """True when this text appears anywhere on the ticket - for "was the POC recorded?"."""
@@ -473,13 +482,15 @@ class TicketDetailPage(BasePage):
 
     # ---- the Reassign modal ----
 
-    def fill_reassign(self, name: str, email: str) -> None:
-        self.type_into((By.ID, "reassign-poc-name"), name)
-        self.type_into((By.ID, "reassign-poc-email"), email)
+    def has_removed_free_text_reassign_field(self) -> bool:
+        """True if either removed free-text Reassign box (name / email) is back on screen."""
+        return any(self.exists((By.ID, i)) for i in REMOVED_REASSIGN_FREE_TEXT_IDS)
 
-    def confirm_reassign(self) -> None:
-        self.click((By.XPATH, "//div[@role='dialog']//button[normalize-space()='Reassign']"))
-        self.wait_gone(self.MODAL)
+    # ---- the "Assign the Ticket" modal (AssignDeptPocModal) ----
+
+    def get_assign_modes(self) -> list[str]:
+        """The "Assign to" choices (Assign to Dept POC / Assign to Another Dept)."""
+        return self.read_dropdown_options(self.modal_field("Assign to"))
 
     # ---- the Manual Escalation modal ----
 
@@ -544,6 +555,99 @@ class TicketDetailPage(BasePage):
                 By.XPATH,
                 "//*[contains(translate(normalize-space(text()),"
                 "'INTERNAL NOTES','internal notes'),'internal notes')]/ancestor::div[2]//li",
+            )
+        )
+
+    # ==================================================================
+    # U12 / U17 - the ATTACHMENTS card and its preview (AttachmentsPanel / AttachmentPreviewModal)
+    # ==================================================================
+    # The card only renders when the ticket has at least one attachment. Each row is a
+    # role="button" (opens the preview) holding a per-file <a aria-label="Download <name>">.
+    # "Download all" sits in the card header only when there are two or more.
+
+    _ATTACHMENTS_CARD = (
+        "//h3[normalize-space()='ATTACHMENTS']/ancestor::div[contains(@class,'rounded-lg')][1]"
+    )
+    ATTACHMENT_ROWS = (By.XPATH, _ATTACHMENTS_CARD + "//div[@role='button']")
+    ATTACHMENT_DOWNLOAD_LINKS = (
+        By.XPATH, _ATTACHMENTS_CARD + "//a[starts-with(@aria-label,'Download ')]"
+    )
+    DOWNLOAD_ALL = (By.XPATH, _ATTACHMENTS_CARD + "//button[normalize-space()='Download all']")
+    #: `{Math.round(zoom * 100)}%` renders as TWO text nodes ("100", "%"), so ask whether ANY
+    #: text node holds the "%" (README pitfall 8 - the same shape as "6 results").
+    PREVIEW_ZOOM_LEVEL = (By.XPATH, "//div[@role='dialog']//span[text()[contains(.,'%')]]")
+    PREVIEW_IMAGE = (By.CSS_SELECTOR, "div[role='dialog'] img")
+    PREVIEW_DOWNLOAD = (By.XPATH, "//div[@role='dialog']//a[@download]")
+
+    def attachment_count(self) -> int:
+        """Rows in the ATTACHMENTS card; 0 when the card is absent (no attachments)."""
+        return self.count(self.ATTACHMENT_ROWS)
+
+    def has_download_all(self) -> bool:
+        return self.exists(self.DOWNLOAD_ALL)
+
+    def attachment_download_labels(self) -> list[str]:
+        return [
+            e.get_attribute("aria-label")
+            for e in self.driver.find_elements(*self.ATTACHMENT_DOWNLOAD_LINKS)
+        ]
+
+    def open_attachment_preview(self, index: int = 0) -> None:
+        rows = self.driver.find_elements(*self.ATTACHMENT_ROWS)
+        self.scroll_to_middle(rows[index])
+        rows[index].click()
+        self.wait_for_modal()
+
+    @staticmethod
+    def preview_control(label: str) -> Locator:
+        """An IconButton in the preview (aria-label): Zoom in / Zoom out / Rotate /
+        Previous attachment / Next attachment."""
+        return (By.CSS_SELECTOR, f"div[role='dialog'] button[aria-label='{label}']")
+
+    def has_preview_control(self, label: str) -> bool:
+        return self.exists(self.preview_control(label))
+
+    def is_preview_control_enabled(self, label: str) -> bool:
+        return self.driver.find_element(*self.preview_control(label)).is_enabled()
+
+    def click_preview_control(self, label: str) -> None:
+        self.click(self.preview_control(label), scroll=False)
+
+    def preview_title(self) -> str:
+        return self.get_modal_title()
+
+    def preview_zoom_text(self) -> str:
+        return self.text_of(self.PREVIEW_ZOOM_LEVEL)
+
+    def preview_image_transform(self) -> str:
+        """The inline rotate(...) the image renderer applies ("" when no image is shown)."""
+        images = self.driver.find_elements(*self.PREVIEW_IMAGE)
+        return (images[0].get_attribute("style") or "") if images else ""
+
+    def has_preview_download(self) -> bool:
+        return self.exists(self.PREVIEW_DOWNLOAD)
+
+    def close_preview(self) -> None:
+        """The preview has a "Close" button in its header (not Cancel)."""
+        self.click((By.XPATH, "//div[@role='dialog']//button[normalize-space()='Close']"))
+        self.wait_gone(self.MODAL)
+
+    # ==================================================================
+    # U11 - PRIORITY & RISK card (PriorityCard.tsx)
+    # ==================================================================
+
+    def priority_card_has_clock(self, label: str) -> bool:
+        """
+        True when PRIORITY & RISK shows an SLA clock with this label - "Current-Level SLA" on
+        every ticket, then "Total SLA" (enquiry) or "Priority SLA" (complaint). The label is a
+        <span> holding the text plus an info-icon tooltip, hence contains() on its own text.
+        """
+        return self.exists(
+            (
+                By.XPATH,
+                "//h3[normalize-space()='PRIORITY & RISK']"
+                "/ancestor::div[contains(@class,'rounded-lg')][1]"
+                f"//span[normalize-space(text())='{label}']",
             )
         )
 

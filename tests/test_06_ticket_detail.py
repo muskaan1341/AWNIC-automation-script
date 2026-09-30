@@ -6,7 +6,7 @@ change with the KIND of ticket and with WHO is looking at it:
 
   Investigation & Resolution   only on a complaint (it is backed by the complaints register)
   Recommended Action Plan      only when the AI pipeline actually ran on this ticket
-  More Action / Change Status  only the items the signed-in role is allowed to use
+  More Action                  only the items the signed-in role is allowed to use
 
 So "the screen has six tabs" is the wrong assertion to write. The right one is "a complaint
 has the investigation tab and an enquiry does not".
@@ -20,6 +20,7 @@ import time
 import pytest
 
 from awnic_qa.base_test import BaseTest
+from awnic_qa.pages.ticket_detail_page import TicketDetailPage
 
 #: Priority from QA/qa-priority-test-matrix.md:
 #:   B-P0 'Ticket detail page — all tabs load without error for a ticket of each type'
@@ -35,7 +36,8 @@ class TestTicketDetail(BaseTest):
     def open_first_ticket_of(self, list_path: str) -> None:
         """Opens the first ticket on a list and waits for the detail screen."""
         # Deployed environments can have an account that signs in fine but holds NO ROLE
-        # (config.deployed.properties: "NO ACCOUNT HOLDS cc_supervisor after the clean"). Without
+        # (UAT had no cc_supervisor holder until 2026-09-30; supervisor-gen@awnic.com now holds it,
+        # but compliance_officer still has none). Without
         # this, every test here waits out the full timeout on a heading that is never coming and
         # fails with "waiting for visibility of element located by By.tagName: h1" — which says
         # nothing about the real cause. Skip with the reason instead.
@@ -48,7 +50,6 @@ class TestTicketDetail(BaseTest):
     # ---------- what the screen shows ----------
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_opening_a_ticket_shows_its_reference_number_as_the_heading(self):
         self.open("/tickets/enquiries")
         self.list.wait_until_loaded()
@@ -62,7 +63,6 @@ class TestTicketDetail(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_every_ticket_always_has_the_four_core_tabs(self):
         self.open_first_ticket_of("/tickets/enquiries")
 
@@ -72,7 +72,6 @@ class TestTicketDetail(BaseTest):
             )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_an_enquiry_has_no_investigation_tab(self):
         self.open_first_ticket_of("/tickets/enquiries")
 
@@ -83,7 +82,6 @@ class TestTicketDetail(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_a_complaint_has_the_investigation_tab(self):
         self.open_first_ticket_of("/tickets/complaints")
 
@@ -93,7 +91,6 @@ class TestTicketDetail(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_every_tab_opens_its_own_page(self):
         self.open_first_ticket_of("/tickets/enquiries")
 
@@ -105,7 +102,6 @@ class TestTicketDetail(BaseTest):
             )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_overview_tab_shows_the_core_ticket_cards(self):
         self.open_first_ticket_of("/tickets/enquiries")
 
@@ -117,7 +113,6 @@ class TestTicketDetail(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_going_back_returns_to_the_list_you_came_from(self):
         self.open_first_ticket_of("/tickets/enquiries")
         self.detail.go_back_to_list()
@@ -129,7 +124,6 @@ class TestTicketDetail(BaseTest):
 
     # ---------- AI honesty ----------
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_an_enquiry_shows_the_enquiry_taxonomy_in_its_ticket_information(self):
         """
         TICKET INFORMATION shows the ENQUIRY taxonomy on an enquiry.
@@ -153,7 +147,6 @@ class TestTicketDetail(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_a_complaint_shows_the_complaint_field_set_instead_of_the_enquiry_one(self):
         """
         The complaint side of the same card shows the complaint taxonomy instead. Enquiry
@@ -172,7 +165,6 @@ class TestTicketDetail(BaseTest):
     # ---------- internal notes ----------
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_an_empty_internal_note_cannot_be_sent(self):
         self.login_once(self.get("supervisorEmail"))
         self.open_first_ticket_of("/tickets/enquiries")
@@ -182,7 +174,6 @@ class TestTicketDetail(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_a_note_made_only_of_spaces_cannot_be_sent(self):
         self.login_once(self.get("supervisorEmail"))
         self.open_first_ticket_of("/tickets/enquiries")
@@ -193,7 +184,6 @@ class TestTicketDetail(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_typing_a_note_enables_send(self):
         self.login_once(self.get("supervisorEmail"))
         self.open_first_ticket_of("/tickets/enquiries")
@@ -204,39 +194,53 @@ class TestTicketDetail(BaseTest):
     # ---------- the action menu ----------
 
 
+    # WHAT CHANGED (2026-09-30): these three used to drive a header "Change Status" button with
+    # a menu of statuses. That button was REMOVED (client requirement 1.24 - see
+    # TicketHeaderActions.tsx): In Progress is now set automatically when the assigned CC
+    # Initiator opens the ticket, and the only manual status move left is "Resolve" inside More
+    # Action. The old tests looked for the missing button and skipped every run ("correctly
+    # hidden"), so they had silently stopped testing anything. Rewritten against the real UI;
+    # every one stops at the confirmation box and CANCELS.
+
+    def _open_enquiry_offering_resolve(self) -> None:
+        """An open enquiry whose More Action offers Resolve, or a skip saying why not."""
+        self.login_once(self.get("supervisorEmail"))
+        self.require_ticket_access()
+        self.open_an_open_ticket_from("/tickets/enquiries")
+        offered = self.detail.more_action_labels()
+        if TicketDetailPage.RESOLVE_ITEM not in offered:
+            pytest.skip(
+                f"{self.detail.get_reference_number()} does not offer Resolve "
+                f"(status '{self.detail.current_status()}', menu {offered}) - it is escalated "
+                "or held for duplicate review, where Resolve is hidden by design."
+            )
+
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_marking_a_ticket_resolved_requires_a_resolution_note(self):
         """
         NOTHING IS EVER MARKED RESOLVED WITHOUT SOMEBODY SAYING HOW.
 
-        Choosing "Resolved" from the status menu opens a box that asks for a resolution note,
-        and the confirm button stays dead until one is written. This is the same rule the
-        Kanban board enforces when a card is dropped into the Resolved column, and the API
-        rejects the change without a note - so all three layers agree.
+        More Action -> Resolve on an enquiry opens StatusChangeConfirmModal ("Change status"),
+        which asks for a Resolution note and keeps its "Change Status" button dead until one is
+        written - the same rule as dropping a card on the board's Resolved column, and the API
+        rejects the move without a note (422). Cancelled at the end: nothing is resolved.
         """
-        self.login_once(self.get("supervisorEmail"))
-        self.open_first_ticket_of("/tickets/enquiries")
+        self._open_enquiry_offering_resolve()
+        status_before = self.detail.current_status()
 
-        if not self.detail.has_change_status_button():
-            pytest.skip(
-                "This ticket is escalated or already closed, so Change Status is correctly "
-                "hidden. Seed an open ticket to exercise this path."
-            )
-
-        self.detail.open_status_menu()
-        if "Resolved" not in self.detail.get_open_menu_labels():
-            pytest.skip("This ticket is already Resolved, so that option is correctly not offered.")
-        self.detail.click_menu_item("Resolved")
+        self.detail.open_resolve()
         self.detail.wait_for_modal()
 
+        assert self.detail.get_modal_title() == TicketDetailPage.RESOLVE_MODAL_TITLE, (
+            f"Resolve should open the '{TicketDetailPage.RESOLVE_MODAL_TITLE}' confirmation. "
+            f"Title: {self.detail.get_modal_title()}"
+        )
         assert self.detail.has_resolution_note_box(), (
             "Resolving should ask HOW the ticket was resolved"
         )
         assert not self.detail.is_status_confirm_enabled(), (
             "Confirm must stay disabled until a resolution note is written"
         )
-
         self.detail.type_status_resolution_note(
             "Policy document was re-issued and emailed to the customer."
         )
@@ -244,66 +248,85 @@ class TestTicketDetail(BaseTest):
             "With a note written, the change should become possible"
         )
 
-        # Cancel - this test proves the guard exists, it does not resolve a real ticket.
         self.detail.close_modal()
+        assert self.detail.current_status() == status_before, (
+            "Cancelling the Resolve box must leave the ticket's status alone"
+        )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
-    def test_changing_to_a_non_resolved_status_does_not_ask_for_a_note(self):
-        self.login_once(self.get("supervisorEmail"))
-        self.open_first_ticket_of("/tickets/enquiries")
+    def test_the_resolve_box_offers_an_unticked_customer_email_opt_in(self):
+        """
+        Replaces "changing to a non-resolved status does not ask for a note": there is no
+        non-resolved manual move left to pick. What the Resolve box still promises beside the
+        note is the notify-customer opt-in (StatusChangeConfirmModal: "Notify customer by
+        email"), and it must start UNTICKED so nobody emails a customer by accident.
+        """
+        self._open_enquiry_offering_resolve()
 
-        if not self.detail.has_change_status_button():
-            pytest.skip("Change Status is correctly hidden on this ticket.")
-
-        self.detail.open_status_menu()
-        offered = self.detail.get_open_menu_labels()
-        plain_status = next((s for s in offered if s != "Resolved"), None)
-        if plain_status is None:
-            pytest.skip("Only 'Resolved' is offered here.")
-
-        self.detail.click_menu_item(plain_status)
+        self.detail.open_resolve()
         self.detail.wait_for_modal()
 
-        assert not self.detail.has_resolution_note_box(), (
-            f"Only resolving needs an explanation; '{plain_status}' should not ask for one"
+        assert self.detail.has_notify_customer_checkbox(), (
+            "Resolving should offer to tell the customer"
         )
-        assert self.detail.is_status_confirm_enabled(), (
-            "With nothing else required, the change should be possible straight away"
-        )
+        assert not self.detail.is_notify_customer_checked(), "...but never tick it for them"
         self.detail.close_modal()
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
-    def test_change_status_never_offers_the_status_the_ticket_is_already_in(self):
+    def test_the_only_manual_status_move_is_resolve_inside_more_action(self):
+        """
+        Replaces "Change Status never offers the status the ticket is already in".
+
+        With the status menu gone the contract is simpler and stricter: no standalone Change
+        Status button in the header, and no raw status items (In Progress / Pending Department
+        POC / Resolved) anywhere in More Action - only "Resolve".
+        """
         self.login_once(self.get("supervisorEmail"))
-        self.open_first_ticket_of("/tickets/enquiries")
+        self.require_ticket_access()
+        self.open_an_open_ticket_from("/tickets/enquiries")
 
-        if not self.detail.has_change_status_button():
-            pytest.skip(
-                "This ticket is escalated or already closed, so Change Status is hidden by "
-                "design. Seed an open ticket to exercise this path."
-            )
-
-        current = self.detail.current_status()
-        self.detail.open_status_menu()
-        offered = self.detail.get_open_menu_labels()
-
-        assert offered, "The status menu should offer something"
-        # THE POINT OF THE TEST, which the old version never made: the menu must not offer the
-        # status the ticket is ALREADY in. "Something is offered" was equally true of a menu
-        # listing the current status back at the user - a move that means nothing and that the
-        # API would refuse.
-        assert current, (
-            "The ticket's current status should be shown beside its reference number"
+        assert not self.detail.has_legacy_change_status_button(), (
+            "The header 'Change Status' button was removed (requirement 1.24) and must not "
+            "come back - Resolve lives in More Action now"
         )
-        assert current not in offered, (
-            f"The ticket is already '{current}', so that must not be offered as a change. "
-            f"Offered: {offered}"
+        offered = self.detail.more_action_labels()
+        stale = [
+            item
+            for item in ("Change Status", "In Progress", "Pending Department POC", "Resolved")
+            if item in offered
+        ]
+        assert not stale, (
+            f"More Action must not offer raw status moves any more. Offered: {offered}"
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
+    def test_resolving_a_complaint_goes_to_its_investigation_tab_not_a_box(self):
+        """
+        A complaint can only close through the Investigation & Resolution form, so Resolve on a
+        complaint NAVIGATES there (…/investigation?from=resolve) instead of resolving in place.
+        Read-only: arriving on the tab changes nothing.
+        """
+        self.login_once(self.get("supervisorEmail"))
+        self.require_ticket_access()
+        self.open_an_open_ticket_from("/tickets/complaints")
+        offered = self.detail.more_action_labels()
+        if TicketDetailPage.RESOLVE_ITEM not in offered:
+            pytest.skip(
+                f"{self.detail.get_reference_number()} does not offer Resolve (menu "
+                f"{offered}) - escalated or on duplicate hold, where it is hidden by design."
+            )
+
+        self.detail.open_resolve()
+        self.wait_for_url_containing("/investigation")
+
+        assert "from=resolve" in self.current_url(), (
+            f"Resolve on a complaint should land on its investigation tab. At: {self.current_url()}"
+        )
+        assert not self.detail.is_modal_open(), (
+            "A complaint must not be resolved through the in-place confirmation box"
+        )
+
+    @pytest.mark.regression
     def test_discarding_asks_for_confirmation_and_never_offers_to_email_the_customer(self):
         """
         Discarding is destructive, so it must ask first - and it must NOT offer to email the
@@ -315,7 +338,19 @@ class TestTicketDetail(BaseTest):
         so the two together pin down the rule rather than just observing it.
         """
         self.login_once(self.get("supervisorEmail"))
-        self.open_first_ticket_of("/tickets/enquiries")
+        self.require_ticket_access()
+        # An OPEN ticket, and one that actually offers the item. The first list row used to be
+        # taken on faith; on 2026-09-30 it was held for duplicate review, where every header
+        # action is frozen by design (reclassifyMenu.ts hides discard under duplicateHoldActive),
+        # so the test timed out on a More Action button that correctly was not there.
+        self.open_an_open_ticket_from("/tickets/enquiries")
+        offered = self.detail.more_action_labels()
+        if "Move to Discarded" not in offered:
+            pytest.skip(
+                f"{self.detail.get_reference_number()} does not offer Move to Discarded "
+                f"({offered}) - held for duplicate review or pending classification, both of "
+                "which freeze it by design."
+            )
 
         self.detail.open_more_action_menu()
         self.detail.click_menu_item("Move to Discarded")
@@ -362,31 +397,33 @@ class TestTicketDetail(BaseTest):
 
     @pytest.mark.quarantine("TKT-03")
     @pytest.mark.blocked("compliance_officer")
-    def test_a_compliance_officer_is_not_offered_the_change_status_button(self):
+    def test_a_compliance_officer_is_not_offered_resolve(self):
         """
-        KNOWN DEFECT - this test is expected to FAIL until the application is fixed.
+        KNOWN DEFECT (TKT-03) - expected to FAIL until the application is fixed.
 
-        A compliance officer is read-only, yet the "Change Status" button is still offered to
-        them. Every other action on this header is hidden from a role that cannot use it -
-        "More Action" checks canReclassify / canDiscard / canReassign / canManualEscalate /
-        canEdit - but Change Status is gated on nothing at all. It is only hidden when the
-        ticket is escalated or already closed.
+        The header "Change Status" button this test used to look for is gone, so the old
+        assertion ("no Change Status button") passed trivially and proved nothing. The DEFECT
+        moved with the action: Resolve inside More Action is gated only on `!isEscalated &&
+        canActNow && actionsEnabled` (TicketHeaderActions.tsx:77). It never checks
+        MOVE_TICKET_STAGE - the page computes `canMoveStage` and passes it down
+        (page.tsx:110/158, TicketDetailHeader.tsx:99), but TicketHeaderActions does not even
+        destructure it. canActNow is true for a read-only role on any ticket with no CC
+        Initiator assigned (ticket-permissions.ts:236), so a Compliance Officer - who holds no
+        move-stage permission - is offered Resolve there, which the API then refuses with 403.
 
-        This is NOT a security hole: the API is the real boundary and refuses the change. It is
-        a UX defect - the user is invited to press a button that is guaranteed to fail - and it
-        breaks the rule in docs/rbac.md that every in-page action mirrors its permission. The
-        fix is a canMoveStage prop, passed the same way canEdit already is.
-
-        The assertion below states the CORRECT behaviour on purpose and has not been weakened
-        to make the suite green.
+        Not a security hole (the API is the boundary); a UX/RBAC-mirroring defect against
+        docs/rbac.md. The assertion states the CORRECT behaviour and is not weakened.
+        Blocked as well: no account holds compliance_officer on UAT (re-checked 2026-09-30).
         """
         self.login_once(self.get("complianceEmail"))
-        self.open_first_ticket_of("/tickets/complaints")
+        self.require_ticket_access()
+        self.open_an_open_ticket_from("/tickets/complaints")
 
-        assert not self.detail.has_change_status_button(), (
-            "A compliance officer holds no move-stage permission, so 'Change Status' should "
-            "be hidden. It is not gated on any capability today - see TicketHeaderActions.tsx, "
-            "which receives canEdit/canReassign/etc but no canMoveStage."
+        offered = self.detail.more_action_labels()
+        assert TicketDetailPage.RESOLVE_ITEM not in offered, (
+            "A compliance officer holds no move-stage permission, so 'Resolve' must not be "
+            f"offered. More Action offered: {offered}. TicketHeaderActions.tsx gates Resolve "
+            "on canActNow only, not on canMoveStage."
         )
 
     # ==================================================================
@@ -443,7 +480,6 @@ class TestTicketDetail(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_discard_reason_list_offers_real_choices(self):
         """
         M07-POS: 'The discard reason list covers the real junk AWNIC receives' and

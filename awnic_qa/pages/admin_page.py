@@ -211,6 +211,28 @@ class AdminPage(BasePage):
         self.click(self.NEXT_PAGE)
         self.wait.until(lambda d: self.get_listed_emails() != before)
 
+    # ---- /role-management: the "Ticket Export Access" matrix (RoleExportAccessMatrix.tsx) ----
+
+    _EXPORT_ACCESS_CARD = (
+        "//h3[normalize-space()='Ticket Export Access']/ancestor::div[contains(@class,'rounded-lg')][1]"
+    )
+    #: role-management/page.tsx appends this to the matrix description for anyone without
+    #: MANAGE_USERS_ORG_WIDE. It is a second text node in the <p>, hence contains().
+    EXPORT_VIEW_ONLY_NOTE = (
+        By.XPATH,
+        "//p[contains(normalize-space(.),'View-only — editing requires an administrator.')]",
+    )
+
+    def export_access_checkboxes(self) -> list:
+        """The matrix's checkboxes (one per role x export tier), once the card has rendered."""
+        self.wait_visible((By.XPATH, "//h3[normalize-space()='Ticket Export Access']"))
+        return self.driver.find_elements(
+            By.XPATH, self._EXPORT_ACCESS_CARD + "//input[@type='checkbox']"
+        )
+
+    def export_access_is_view_only(self) -> bool:
+        return self.exists(self.EXPORT_VIEW_ONLY_NOTE)
+
     def lists_user(self, email: str) -> bool:
         """True when a named user appears anywhere in the list."""
         return self.exists((By.XPATH, f"//td[contains(normalize-space(.),'{email}')]"))

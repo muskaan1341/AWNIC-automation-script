@@ -205,14 +205,17 @@ ROLE_ACTIONS = [
 # Execution state, per CELL
 # ==================================================================
 # The grid is the one place where "can this run here?" varies row by row rather than file by
-# file, so the blocked marker is attached to the individual cases: the accounts for
-# cc_supervisor and compliance_officer hold no role on the deployed environment, so those
-# rows skip themselves (require_ticket_access / the denial they would read is not the
-# product's answer). Marking them keeps `-m "regression and not blocked"` honest without
-# hiding them from the repository. The CC Initiator screen rows double as the Sanity slice:
-# one verified account, nine screens, the whole allow/deny contract in one pass.
+# file, so the blocked marker is attached to the individual cases. As of 2026-09-30 (read-only
+# SELECT on user_roles + real UAT sign-ins) only compliance_officer still has NO holder, so only
+# the complianceEmail rows are blocked - they skip themselves ("No matching account").
+#   supervisorEmail       = supervisor-gen@awnic.com, holds cc_supervisor - all 13 cells PASSED
+#                           on UAT 2026-09-30, so its rows run in the gating regression again.
+#   complaintHandlerEmail = complaints.officer@awnic.ae, holds complaint_handler - its rows were
+#                           never marked blocked, and now exercise a real grant.
+# Marking the blocked rows keeps `-m "regression and not blocked"` honest without hiding them
+# from the repository. The CC Initiator screen rows double as the Sanity slice: one verified
+# account, nine screens, the whole allow/deny contract in one pass.
 _BLOCKED_ACCOUNT = {
-    "supervisorEmail": "cc_supervisor",
     "complianceEmail": "compliance_officer",
 }
 _SANITY_ACCOUNT = "agentEmail"

@@ -24,6 +24,7 @@ from __future__ import annotations
 import re
 
 from selenium.common.exceptions import StaleElementReferenceException
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 
@@ -457,6 +458,86 @@ class TicketListPage(BasePage):
             if line and line not in initials:
                 return line
         return ""
+
+    # ---- U11 / U15: the SLA columns, the working-day line, Refresh, merged rows ----
+
+    #: TicketTypeListClient.tsx: the whole-ticket clock and the current holder's clock.
+    SLA_COLUMN = "SLA"
+    CURRENT_LEVEL_SLA_COLUMN = "Current-Level SLA"
+    #: TicketPriorityCell.tsx renders "<n> WD" under the priority pill.
+    WORKING_DAYS_LINE = re.compile(r"^(\d+) WD$")
+
+    def has_refresh_button(self) -> bool:
+        """RefreshButton.tsx - a secondary Button whose text is "Refresh"."""
+        return self.has_button("Refresh")
+
+    def priority_working_day_lines(self) -> list[tuple[str, str]]:
+        """
+        (department, working-day line) for every row on the page.
+
+        The Priority cell is TWO lines - the pill ("High") and "<n> WD" beneath it - so the
+        generic get_column_values() (first line only) cannot read it. The line is taken as the
+        cell's LAST line; "" when the cell has only one. The department travels with it because
+        the figure is the whole-ticket ceiling only once a department is assigned
+        (TicketPriorityCell falls back to sla_days before that).
+        """
+        raw = self.texts_of(self.COLUMN_HEADERS)
+        pri, dept = raw.index("Priority"), raw.index("Department")
+        out: list[tuple[str, str]] = []
+        for row in self.driver.find_elements(*self.TABLE_ROWS):
+            cells = row.find_elements(By.TAG_NAME, "td")
+            if len(cells) <= max(pri, dept):
+                continue
+            lines = [ln.strip() for ln in cells[pri].text.split("\n") if ln.strip()]
+            out.append((cells[dept].text.strip(), lines[-1] if len(lines) > 1 else ""))
+        return out
+
+    def merged_rows(self) -> list[dict]:
+        """
+        Every row whose reference cell carries the "Merged" badge (TicketReferenceCell.tsx),
+        with whether the product left it clickable. A merged row is rendered inert on the
+        per-type lists (rowDisabled={(t) => t.is_duplicate} -> DataTable "cursor-not-allowed").
+        """
+        found: list[dict] = []
+        for index, row in enumerate(self.driver.find_elements(*self.TABLE_ROWS)):
+            cells = row.find_elements(By.TAG_NAME, "td")
+            if len(cells) < 3:
+                continue
+            lines = [ln.strip() for ln in cells[2].text.split("\n") if ln.strip()]
+            if "Merged" not in lines:
+                continue
+            classes = row.get_attribute("class") or ""
+            found.append(
+                {
+                    "index": index,
+                    "reference": lines[0],
+                    "clickable": "cursor-pointer" in classes,
+                    "inert": "cursor-not-allowed" in classes,
+                }
+            )
+        return found
+
+    def reference_tooltip(self, row_index: int) -> str:
+        """
+        Hovers a row's reference cell and returns the tooltip it reveals ("" if none).
+
+        Tooltip.tsx wraps the cell in a focusable <span> and portals role="tooltip" to <body>
+        on mouseenter; the merged-into sentence ("This ticket has been merged into X.") lives
+        only there.
+        """
+        row = self.driver.find_elements(*self.TABLE_ROWS)[row_index]
+        trigger = row.find_elements(By.TAG_NAME, "td")[2].find_element(
+            By.CSS_SELECTOR, "span[tabindex='0']"
+        )
+        self.scroll_to_middle(trigger)
+        ActionChains(self.driver).move_to_element(trigger).perform()
+        try:
+            return self.wait_visible((By.CSS_SELECTOR, "[role='tooltip']")).text.strip()
+        finally:
+            # Move off the cell (onto the page heading) so the tooltip closes again.
+            ActionChains(self.driver).move_to_element(
+                self.driver.find_element(*self.HEADING)
+            ).perform()
 
     def get_current_page_number(self) -> int:
         text = self.text_of(self.CURRENT_PAGE)

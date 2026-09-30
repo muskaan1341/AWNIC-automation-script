@@ -33,7 +33,7 @@ from awnic_qa.base_test import BaseTest
 
 #: Priority from QA/qa-priority-test-matrix.md:
 #:   B-P1 'Resolution Tracking notes — intentionally ungated; notes are attributed'
-pytestmark = [pytest.mark.p1, pytest.mark.phase1, pytest.mark.regression, pytest.mark.blocked("cc_supervisor")]
+pytestmark = [pytest.mark.p1, pytest.mark.phase1, pytest.mark.regression]
 
 
 

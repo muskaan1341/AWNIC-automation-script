@@ -5,7 +5,8 @@ The read-only oversight screens. Four of them share this page object because the
   /reports       the management report - see the warning below, this one CHANGED
   /audit-trail   the organisation-wide audit trail
   /history       Customer History - every past case for one customer
-  /teams-sla     Teams & SLA configuration
+  /teams-sla     Teams & SLA configuration (seven tabs - see the Teams & SLA section below)
+  /historical    the Historical Complaints archive (R46 import lives here, HOD only)
 
 NOTHING ON THESE SCREENS IS EVER INVENTED. The report is calculated live from the tickets
 every time it is opened - there is no stored copy, no cache, and no placeholder number. That
@@ -296,3 +297,156 @@ class ReportsPage(BasePage):
 
     def shows_customer_list(self) -> bool:
         return self.exists((By.TAG_NAME, "table")) or self.exists((By.CSS_SELECTOR, "li"))
+
+    #: app/history/HistorySearch.tsx placeholder.
+    HISTORY_SEARCH = (By.CSS_SELECTOR, "input[placeholder^='Search a customer']")
+    #: CustomerHistoryGrouped.tsx section labels, in its reading order.
+    HISTORY_GROUPS = ["Enquiry Tickets", "Complaint Tickets", "Discarded Tickets"]
+    HISTORY_ROW_LINKS = (By.XPATH, "//a[contains(@href,'/tickets/') and contains(@href,'returnTo=')]")
+
+    def has_history_search(self) -> bool:
+        return self.exists(self.HISTORY_SEARCH)
+
+    def history_view_is(self, label: str) -> bool:
+        """The Grouped / Timeline switch (CustomerHistoryView) - aria-pressed on the chosen one."""
+        buttons = self.driver.find_elements(
+            By.XPATH, f"//button[@aria-pressed][normalize-space()='{label}']"
+        )
+        return bool(buttons) and buttons[0].get_attribute("aria-pressed") == "true"
+
+    def switch_history_view(self, label: str) -> None:
+        self.click((By.XPATH, f"//button[@aria-pressed][normalize-space()='{label}']"))
+        self.wait.until(lambda d: self.history_view_is(label))
+
+    def history_group_labels(self) -> list[str]:
+        """The grouped sections shown (textContent - the labels are CSS-uppercased)."""
+        labels = []
+        for button in self.driver.find_elements(By.XPATH, "//button[@aria-expanded]"):
+            text = (button.get_attribute("textContent") or "").strip()
+            labels += [g for g in self.HISTORY_GROUPS if text.startswith(g)]
+        return labels
+
+    def expand_all_history_groups(self) -> None:
+        for button in self.driver.find_elements(By.XPATH, "//button[@aria-expanded='false']"):
+            text = (button.get_attribute("textContent") or "").strip()
+            if any(text.startswith(g) for g in self.HISTORY_GROUPS):
+                self.scroll_to_middle(button)
+                button.click()
+
+    def history_references(self) -> list[str]:
+        """Reference numbers of every history row on screen (the row's first bold span)."""
+        refs = []
+        for link in self.driver.find_elements(*self.HISTORY_ROW_LINKS):
+            spans = link.find_elements(By.CSS_SELECTOR, "span.font-semibold")
+            if spans:
+                refs.append(spans[0].text.strip())
+        return refs
+
+    # ---- Teams & SLA (components/teams-sla/TeamsSlaClient.tsx) ----
+
+    #: Tab label -> the tab's key, which Tabs.tsx turns into id="tabpanel-<key>".
+    TEAMS_SLA_TABS = {
+        "Teams": "teams",
+        "SLA Policy": "sla",
+        "Escalation Ladder": "escalation-ladder",
+        "CC Initiator Pools": "cc-initiator-pools",
+        "Working Hours": "working-hours",
+        "Holidays": "holidays",
+        "Classification": "classification",
+    }
+    #: Button labels whose presence means a panel can CHANGE something - matched EXACTLY, never
+    #: as a prefix: the Classification tree's own node buttons are taxonomy values, and an
+    #: enquiry named e.g. "Add driver" is data, not an edit control.
+    EDIT_BUTTON_LABELS = ("Save", "Edit", "Add", "Remove", "Delete", "Update", "Add Team")
+
+    def teams_sla_tab_labels(self) -> list[str]:
+        return [t for t in self.texts_of((By.CSS_SELECTOR, "[role='tablist'] [role='tab']")) if t]
+
+    def open_teams_sla_tab(self, label: str):
+        """Selects a tab and returns its (now visible) tabpanel element."""
+        self.click((By.XPATH, f"//*[@role='tab'][normalize-space()='{label}']"))
+        panel = (By.ID, f"tabpanel-{self.TEAMS_SLA_TABS[label]}")
+        return self.wait_visible(panel)
+
+    @staticmethod
+    def enabled_edit_controls(panel) -> list[str]:
+        """
+        What inside a tabpanel could change data: enabled text/number/date inputs, textareas
+        and selects (a search box is navigation, not editing, so type=search and the
+        placeholder "Search..." boxes are left out), switches, and buttons labelled with an
+        editing verb.
+        """
+        found = []
+        for el in panel.find_elements(By.CSS_SELECTOR, "input, textarea, select"):
+            placeholder = (el.get_attribute("placeholder") or "").lower()
+            kind = (el.get_attribute("type") or "").lower()
+            if kind in ("search", "hidden") or placeholder.startswith("search"):
+                continue
+            if el.is_enabled() and el.get_attribute("readonly") is None:
+                found.append(f"<{el.tag_name} type={kind or '-'}>")
+        for el in panel.find_elements(By.CSS_SELECTOR, "[role='switch']"):
+            if el.is_enabled():
+                found.append(f"switch '{el.get_attribute('aria-label')}'")
+        for el in panel.find_elements(By.TAG_NAME, "button"):
+            text = el.text.strip()
+            if text in ReportsPage.EDIT_BUTTON_LABELS:
+                found.append(f"button '{text}'")
+        return found
+
+    @staticmethod
+    def holiday_controls(panel) -> dict:
+        """HolidaysCard.tsx edit controls inside the Holidays tabpanel (empty lists when absent)."""
+        return {
+            "date_inputs": panel.find_elements(By.CSS_SELECTOR, "input[type='date']"),
+            "add_buttons": panel.find_elements(By.XPATH, ".//button[normalize-space()='Add']"),
+            "remove_buttons": panel.find_elements(
+                By.CSS_SELECTOR, "button[aria-label^='Remove ']"
+            ),
+        }
+
+    @staticmethod
+    def pool_controls(panel) -> dict:
+        """CC Initiator Pools controls: the daily-limit box + Save (CcInitiatorDailyLimit) and
+        the per-initiator availability switches (CcInitiatorMembersTable)."""
+        return {
+            "limit_inputs": panel.find_elements(By.CSS_SELECTOR, "input[type='number']"),
+            "save_buttons": panel.find_elements(By.XPATH, ".//button[normalize-space()='Save']"),
+            "switches": panel.find_elements(By.CSS_SELECTOR, "[role='switch']"),
+        }
+
+    # ---- Historical Complaints (components/complaints/HistoricalArchiveClient.tsx) ----
+
+    HISTORICAL_HEADING = "Historical Complaints"
+    IMPORT_BUTTON = (By.XPATH, "//button[normalize-space()='Import']")
+    TEMPLATE_BUTTON = (By.XPATH, "//button[normalize-space()='Download template']")
+    IMPORT_FILE_INPUT = (By.CSS_SELECTOR, "input[type='file'][accept='.xlsx']")
+    IMPORT_RESULT_CALLOUT = (
+        By.XPATH, "//*[normalize-space()='Nothing was imported.' "
+        "or normalize-space()='Fix the rows below and re-upload — nothing was imported.']",
+    )
+
+    def has_import_controls(self) -> bool:
+        return self.exists(self.IMPORT_BUTTON) and self.exists(self.TEMPLATE_BUTTON)
+
+    def archive_row_count(self) -> int:
+        """Data rows in the archive table (0 for the "No historical complaints" empty row)."""
+        if self.exists(self.innermost_containing("No historical complaints imported yet")):
+            return 0
+        return self.count((By.CSS_SELECTOR, "table tbody tr"))
+
+    def upload_import_file(self, path: str) -> None:
+        """
+        Hands a file to the hidden Import <input> - the same element the Import button clicks.
+
+        The input is `class="hidden"` (display:none), which chromedriver will not type into,
+        so the class is dropped first. Nothing else about the upload is simulated: the page's
+        own onChange posts the file exactly as a person's pick would.
+        """
+        box = self.driver.find_element(*self.IMPORT_FILE_INPUT)
+        self.driver.execute_script("arguments[0].classList.remove('hidden');", box)
+        box.send_keys(path)
+
+    def wait_for_import_rejection(self) -> str:
+        """Waits for the failed-import Callout and returns its title (the API's message)."""
+        body = self.wait_visible(self.IMPORT_RESULT_CALLOUT)
+        return body.find_element(By.XPATH, "preceding-sibling::p[1]").text.strip()

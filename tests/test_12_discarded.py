@@ -34,22 +34,21 @@ class TestDiscarded(BaseTest):
     def sign_in(self, request, browser):
         request.cls.login_class(request.cls.get("supervisorEmail"))
 
-    def open_discarded(self) -> None:
+    def open_discarded(self, role_key: str = "supervisorEmail") -> None:
         # Names its own role on purpose: two tests in this class sign in as a complaint
         # handler. pytest runs methods in DEFINITION order, so those two come last here - but
         # login_once is free when the right person is already signed in, and it keeps this
         # helper correct however the file is later reordered.
-        self.login_once(self.get("supervisorEmail"))
+        self.login_once(self.get(role_key))
         # Say WHY when this account has no role, instead of waiting 20 seconds for a heading
         # that is never coming. See BaseTest.require_ticket_access.
-        self.require_ticket_access("supervisorEmail")
+        self.require_ticket_access(role_key)
         self.open("/tickets/discarded")
         self.discarded.wait_until_loaded()
 
     # ---------- the list ----------
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_it_has_its_own_five_columns_not_the_ticket_lists_eighteen(self):
         self.open_discarded()
 
@@ -63,7 +62,6 @@ class TestDiscarded(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_discarded_items_carry_the_junk_reference_prefix(self):
         self.open_discarded()
 
@@ -77,7 +75,6 @@ class TestDiscarded(BaseTest):
             )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_search_box_says_what_it_actually_searches(self):
         self.open_discarded()
 
@@ -87,7 +84,6 @@ class TestDiscarded(BaseTest):
         )
 
     @pytest.mark.quarantine("unexplained-2026-09")
-    @pytest.mark.blocked("cc_supervisor")
     def test_search_narrows_the_discarded_list(self):
         self.open_discarded()
 
@@ -111,14 +107,19 @@ class TestDiscarded(BaseTest):
         pytest.skip("Every discarded row has already been restored.")
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_the_row_menu_offers_restoring_as_either_type(self):
         """
         Restoring must be a CHOICE, not an automatic guess. A discarded message could turn
         out to be either an enquiry or a complaint, and only a person can tell which - so the
         menu offers both, and neither happens by itself.
+
+        Signed in as the HEAD OF DEPARTMENT, not the supervisor: the Restore items are gated on
+        RECLASSIFY_TICKET_TYPE (app/tickets/discarded/page.tsx `canRestore={can(me,
+        RECLASSIFY_TICKET_TYPE)}`), held by HOD and CC Initiator only. The supervisor's menu is
+        correctly just "View details" - the first supervisor run (2026-09-30) failed on exactly
+        that. HOD rather than the CC Initiator because listing discarded rows opens no ticket.
         """
-        self.open_discarded()
+        self.open_discarded("hodEmail")
 
         row_to_use = self._first_restorable_row()
         self.discarded.open_row_menu(row_to_use)
@@ -132,7 +133,6 @@ class TestDiscarded(BaseTest):
         )
 
     @pytest.mark.regression
-    @pytest.mark.blocked("cc_supervisor")
     def test_an_already_restored_row_stays_on_the_list_but_loses_its_actions(self):
         """
         A restored ticket stays on this list, badged "Restored", with NO action menu - and
