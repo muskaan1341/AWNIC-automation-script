@@ -1,5 +1,104 @@
 # AWNIC Case Management — Selenium UI tests
 
+Browser tests for the AWNIC Case Management application, written in Python with Selenium and
+pytest. They open a real Chrome window, sign in, and check what a real user would see.
+
+> **New here?** Do the [Quick start](#quick-start) below. Everything after it is background
+> reading, and you do not need it to run the tests.
+
+---
+
+## Quick start
+
+**Read this first:** this repo contains **only the tests**. The application they test runs
+somewhere else. Point the tests at the shared AWS test site by adding `--env=deployed` to every
+command.
+
+### A. One-time setup (after you clone)
+
+You need **Python 3.11+** and **Google Chrome** installed. You do not need `chromedriver`.
+
+```bash
+git clone https://github.com/muskaan1341/AWNIC-automation-script.git
+cd AWNIC-automation-script
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### B. Every time you run the tests
+
+**1. Open a terminal in the repo folder and activate the environment:**
+
+```bash
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+```
+
+**2. Run the smoke tests first** (14 tests, about 3 minutes):
+
+```bash
+pytest --env=deployed -m smoke
+```
+
+✅ Expected: `14 passed`. If anything fails here, fix it before running anything bigger.
+
+**3. Then run what you need:**
+
+| I want to run… | Command | Time |
+|---|---|---|
+| Sanity | `pytest --env=deployed -m sanity` | ~12 min |
+| Regression (main run) | `pytest --env=deployed -m "regression and not blocked"` | ~36 min |
+| Everything | `pytest --env=deployed` | longest |
+| One file | `pytest --env=deployed tests/test_07_kanban.py` | — |
+| Without a Chrome window | add `-D headless=true` | — |
+| With an HTML report | add `--html=report.html --self-contained-html` | — |
+
+Some tests show as **skipped** on the shared site. That is expected: some accounts and data do
+not exist there. The reason for each skip is printed at the end of the run.
+
+### C. Running against your own laptop (optional)
+
+Do this only if you also have the **AWNIC application repo** (`apps/api`, `apps/web`). Ask the
+team for it.
+
+1. In the **application repo**, start the database, API and web app, then load the test data:
+   ```bash
+   cd apps/api && docker compose up -d                                  # terminal 1
+   cd apps/api && .venv/bin/uvicorn app.main:app --reload --port 8010   # terminal 2
+   cd apps/web && npm run dev                                           # terminal 3
+   make seed-demo                                                       # once
+   ```
+2. Open <http://localhost:3200>. You should see the sign-in page.
+3. Back in **this repo**, run the tests **without** `--env`:
+   ```bash
+   pytest -m smoke
+   ```
+
+The first local run is slow: each page takes about 40 seconds the first time it opens.
+
+### D. If something goes wrong
+
+| Problem | Fix |
+|---|---|
+| Every test fails and the screenshots say *"localhost refused to connect"* | You forgot `--env=deployed` |
+| `No module named pytest` or `No module named selenium` | Run `source .venv/bin/activate`, then `pip install -r requirements.txt` |
+| Strange errors, and the run header shows `pytest-9.x` | The environment is not activated, so a different pytest ran. Activate `.venv` |
+| Chrome does not open | Install Google Chrome. The first run also needs internet access to download the driver |
+
+### E. Don'ts
+
+- ❌ Don't run without `--env=deployed`, unless the app is running on your laptop.
+- ❌ Don't run tests in parallel (no `-n`, no `pytest-xdist`). Sign-in is limited to 10 per
+  minute.
+- ❌ Don't pass `-D writeTestsEnabled=true` on the shared site. Those tests change real data.
+
+---
+
+# Reference
+
+Everything below explains how the suite is built and why. You do not need to read it to run the
+tests.
+
 Python + Selenium + pytest. **373 test cases across 24 classes** (285 test methods;
 `test_15_role_matrix.py`'s two are parametrized and expand to 90 cases).
 
@@ -17,7 +116,7 @@ factory, no listeners, no retry framework, no reporting plugin.
 ## 1. How it is put together
 
 ```
-QA/selenium-py/
+AWNIC-automation-script/
 ├── requirements.txt         two real dependencies: selenium + pytest
 ├── pytest.ini               markers, test paths, the 300s per-test backstop
 ├── conftest.py              CLI options, settings loading, the browser lifecycle
@@ -190,46 +289,10 @@ relationships that must hold whatever the data is doing ("Open Cases can never e
 
 ## 4. Running it locally
 
-Install once:
-
-```bash
-cd QA/selenium-py
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
-
-Chrome's driver is downloaded automatically by Selenium Manager, built into Selenium 4. There
-is no `chromedriver` to install.
-
-The application has to be running locally first:
-
-```bash
-# terminal 1 — database
-cd apps/api && docker compose up -d
-
-# terminal 2 — API   (port 8010, not 8000)
-cd apps/api && .venv/bin/uvicorn app.main:app --reload --port 8010
-
-# terminal 3 — web   (port 3200)
-cd apps/web && npm run dev
-
-# once, to put the test data in place
-make seed-demo
-```
-
-Then:
-
-```bash
-cd QA/selenium-py
-
-.venv/bin/python -m pytest                              # the whole suite
-.venv/bin/python -m pytest -D headless=true             # no visible window (use in CI)
-.venv/bin/python -m pytest tests/test_07_kanban.py      # one class
-.venv/bin/python -m pytest -k unknown_email             # one test
-.venv/bin/python -m pytest -D baseUrl=http://localhost:3300   # a different port
-.venv/bin/python -m pytest -D timeoutSeconds=15         # faster, once the app is warm
-.venv/bin/python -m pytest -m smoke                     # the short confidence run
-```
+The step-by-step instructions are in [Quick start, section C](#c-running-against-your-own-laptop-optional).
+In short: start the database, the API (port 8010) and the web app (port 3200) from the AWNIC
+application repository, run `make seed-demo` once, then run `.venv/bin/python -m pytest` from
+this repository without `--env`.
 
 ---
 
@@ -467,7 +530,8 @@ out of the default run.
 
 # QA Automation Execution & Progress
 
-*Added 2026-09-29. Everything above this line is the original README and is unchanged.*
+*Added 2026-09-29. Everything above this line is the original README, apart from the Quick
+start and the §4 pointer added on 2026-10-01.*
 
 This section is the record of the Smoke / Sanity / Regression work: how the suite is
 organised now, what has actually been run, what was fixed, and what is still open. Every
