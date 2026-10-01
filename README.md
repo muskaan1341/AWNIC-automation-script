@@ -1,9 +1,5 @@
 # AWNIC Case Management - UI Automation (Selenium + Python)
 
-<<<<<<< HEAD
-Browser tests for the AWNIC Case Management web app. The tests open Chrome, sign in as
-different AWNIC users, and check the screens the way a user would.
-=======
 Browser tests for the AWNIC Case Management application, written in Python with Selenium and
 pytest. They open a real Chrome window, sign in, and check what a real user would see.
 
@@ -48,14 +44,15 @@ pytest --env=deployed -m smoke
 
 **3. Then run what you need:**
 
-| I want to run… | Command | Time |
-|---|---|---|
-| Sanity | `pytest --env=deployed -m sanity` | ~12 min |
-| Regression (main run) | `pytest --env=deployed -m "regression and not blocked"` | ~36 min |
-| Everything | `pytest --env=deployed` | longest |
-| One file | `pytest --env=deployed tests/test_07_kanban.py` | — |
-| Without a Chrome window | add `-D headless=true` | — |
-| With an HTML report | add `--html=report.html --self-contained-html` | — |
+
+| I want to run…         | Command                                                 | Time    |
+| ------------------------- | --------------------------------------------------------- | --------- |
+| Sanity                  | `pytest --env=deployed -m sanity`                       | ~12 min |
+| Regression (main run)   | `pytest --env=deployed -m "regression and not blocked"` | ~36 min |
+| Everything              | `pytest --env=deployed`                                 | longest |
+| One file                | `pytest --env=deployed tests/test_07_kanban.py`         | —      |
+| Without a Chrome window | add`-D headless=true`                                   | —      |
+| With an HTML report     | add`--html=report.html --self-contained-html`           | —      |
 
 Some tests show as **skipped** on the shared site. That is expected: some accounts and data do
 not exist there. The reason for each skip is printed at the end of the run.
@@ -72,7 +69,7 @@ team for it.
    cd apps/web && npm run dev                                           # terminal 3
    make seed-demo                                                       # once
    ```
-2. Open <http://localhost:3200>. You should see the sign-in page.
+2. Open [http://localhost:3200](http://localhost:3200). You should see the sign-in page.
 3. Back in **this repo**, run the tests **without** `--env`:
    ```bash
    pytest -m smoke
@@ -82,12 +79,13 @@ The first local run is slow: each page takes about 40 seconds the first time it 
 
 ### D. If something goes wrong
 
-| Problem | Fix |
-|---|---|
-| Every test fails and the screenshots say *"localhost refused to connect"* | You forgot `--env=deployed` |
-| `No module named pytest` or `No module named selenium` | Run `source .venv/bin/activate`, then `pip install -r requirements.txt` |
-| Strange errors, and the run header shows `pytest-9.x` | The environment is not activated, so a different pytest ran. Activate `.venv` |
-| Chrome does not open | Install Google Chrome. The first run also needs internet access to download the driver |
+
+| Problem                                                                  | Fix                                                                                    |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Every test fails and the screenshots say*"localhost refused to connect"* | You forgot`--env=deployed`                                                             |
+| `No module named pytest` or `No module named selenium`                   | Run`source .venv/bin/activate`, then `pip install -r requirements.txt`                 |
+| Strange errors, and the run header shows`pytest-9.x`                     | The environment is not activated, so a different pytest ran. Activate`.venv`           |
+| Chrome does not open                                                     | Install Google Chrome. The first run also needs internet access to download the driver |
 
 ### E. Don'ts
 
@@ -105,7 +103,14 @@ tests.
 
 Python + Selenium + pytest. **373 test cases across 24 classes** (285 test methods;
 `test_15_role_matrix.py`'s two are parametrized and expand to 90 cases).
+
 >>>>>>> b825aec1b2069ab8f94fc5f64384be27b1bd5da5
+>>>>>>>
+>>>>>>
+>>>>>
+>>>>
+>>>
+>>
 
 This repository contains **only the tests**. The application itself lives in a separate
 repository (`awinc-case-management`). You do not need that repository to run these tests
@@ -121,7 +126,8 @@ against the shared UAT site.
 | Python | 3.11 or newer | `python3 --version` |
 | Google Chrome | any recent version | open Chrome > About |
 | Git | any | `git --version` |
-=======
+===============================
+
 ```
 AWNIC-automation-script/
 ├── requirements.txt         two real dependencies: selenium + pytest
@@ -158,7 +164,14 @@ AWNIC-automation-script/
     ├── check_intake_results.py    read-only: what the live pipeline did with a test email
     └── testcase_generator/        builds the QA .xlsx test-case packs
 ```
+
 >>>>>>> b825aec1b2069ab8f94fc5f64384be27b1bd5da5
+>>>>>>>
+>>>>>>
+>>>>>
+>>>>
+>>>
+>>
 
 - You do **not** need to download ChromeDriver. Selenium downloads the right one on the first run.
 - Your network must be able to reach the UAT site: https://twu3nrmnmv.eu-west-1.awsapprunner.com
@@ -206,29 +219,33 @@ You should see `412 tests collected`.
 All settings are in the `config/` folder. There are no passwords: the app's test login only
 needs an email address.
 
-| File | Used when | Points to |
-| --- | --- | --- |
-| `config/config.deployed.properties` | you add `--env=deployed` | the shared UAT site |
-| `config/config.properties` | you add nothing (default) | the app running on your own laptop (`http://localhost:3200`) |
+
+| File                                | Used when                 | Points to                                                    |
+| ------------------------------------- | --------------------------- | -------------------------------------------------------------- |
+| `config/config.deployed.properties` | you add`--env=deployed`   | the shared UAT site                                          |
+| `config/config.properties`          | you add nothing (default) | the app running on your own laptop (`http://localhost:3200`) |
 
 Main settings in each file:
 
-| Setting | Meaning |
-| --- | --- |
-| `baseUrl` | the website address the tests open |
-| `timeoutSeconds` | how long to wait for a page or element |
-| `headless` | `true` = run Chrome without a window |
-| `adminEmail`, `agentEmail`, `hodEmail`, `managerEmail`, `supervisorEmail`, `complaintHandlerEmail`, `complianceEmail`, `deptPocEmail` | the test account used for each role |
-| `writeTestsEnabled` | `false` = tests that create or change data are skipped (keep it `false` on UAT) |
-| `missingAccountsAreSkipped` | `true` = if a role's account does not exist, its tests are skipped instead of failing |
+
+| Setting                                                                                                                               | Meaning                                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `baseUrl`                                                                                                                             | the website address the tests open                                                    |
+| `timeoutSeconds`                                                                                                                      | how long to wait for a page or element                                                |
+| `headless`                                                                                                                            | `true` = run Chrome without a window                                                  |
+| `adminEmail`, `agentEmail`, `hodEmail`, `managerEmail`, `supervisorEmail`, `complaintHandlerEmail`, `complianceEmail`, `deptPocEmail` | the test account used for each role                                                   |
+| `writeTestsEnabled`                                                                                                                   | `false` = tests that create or change data are skipped (keep it `false` on UAT)       |
+| `missingAccountsAreSkipped`                                                                                                           | `true` = if a role's account does not exist, its tests are skipped instead of failing |
 
 You can change one setting for a single run with `-D`, without editing the file:
 
 ```bash
 pytest --env=deployed -D headless=true
 ```
+
 =======
 pytest --env=deployed -m smoke
+
 ```
 
 If that is red, do not bother with the full suite yet. If it is green, the deployment is alive
@@ -609,16 +626,17 @@ If your web app uses another port: `pytest -D baseUrl=http://localhost:3300`.
 
 Each test has labels, so you can choose what to run with `-m`.
 
-| Marker | Meaning |
-| --- | --- |
-| `smoke` | small "is the app working?" check |
-| `sanity` | main areas, one check each |
-| `regression` | the full protection suite |
-| `phase1` / `phase2` | which project phase the feature belongs to |
-| `p0` / `p1` / `p2` | priority (p0 = most important) |
-| `blocked` | cannot run yet (for example, no account exists for that role). 29 tests. Shows the reason. |
-| `quarantine` | a known defect - expected to fail until the app is fixed |
-| `write` | changes data - skipped unless `writeTestsEnabled=true` |
+
+| Marker              | Meaning                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------- |
+| `smoke`             | small "is the app working?" check                                                          |
+| `sanity`            | main areas, one check each                                                                 |
+| `regression`        | the full protection suite                                                                  |
+| `phase1` / `phase2` | which project phase the feature belongs to                                                 |
+| `p0` / `p1` / `p2`  | priority (p0 = most important)                                                             |
+| `blocked`           | cannot run yet (for example, no account exists for that role). 29 tests. Shows the reason. |
+| `quarantine`        | a known defect - expected to fail until the app is fixed                                   |
+| `write`             | changes data - skipped unless`writeTestsEnabled=true`                                      |
 
 The full list is in `pytest.ini`.
 
@@ -643,36 +661,37 @@ AWNIC-automation-script/
 
 ### What each test file covers
 
-| File | Area | Tests |
-| --- | --- | --- |
-| test_01_login.py | Login and logout | 15 |
-| test_02_navigation.py | Side menu and breadcrumb | 10 |
-| test_03_dashboard.py | Dashboard | 8 |
-| test_04_ticket_list.py | Enquiries and Complaints lists | 22 |
-| test_05_ticket_filter.py | Filtering the ticket list | 11 |
-| test_06_ticket_detail.py | Ticket detail screen | 21 |
-| test_06a_investigation.py | Investigation & Resolution tab | 11 |
-| test_06b_customer_records.py | Customer & Records tab, customer history | 13 |
-| test_07_kanban.py | Kanban board | 13 |
-| test_07a_sla.py | SLA tab | 10 |
-| test_07b_escalation.py | Manual escalation | 3 |
-| test_08_create_ticket.py | Manual ticket creation | 22 |
-| test_08b_reply_lifecycle.py | Ticket lifecycle via replies | 10 |
-| test_08c_conditional_fields.py | Conditional fields on create/edit forms | 9 |
-| test_09_form_validation.py | Form validation messages | 9 |
-| test_10_modal_form_validation.py | Pop-up form validation | 5 |
-| test_12_discarded.py | Discarded queue | 6 |
-| test_13_admin.py | Users, roles and permissions | 12 |
-| test_13a_notification.py | Notification bell | 11 |
-| test_14_reports_audit.py | Reports, audit trail, ticket history | 18 |
-| test_15_role_access.py | Access control | 9 |
-| test_15_role_matrix.py | Every role vs every screen and action | 98 |
-| test_16_department_isolation.py | Dept POC sees only own department | 8 |
-| test_17_role_scope.py | Which tickets each role can see | 8 |
-| test_18_fixed_bug_regression.py | Bugs already fixed | 5 |
-| test_19_uat_regression.py | Reopened UAT items (U11, U12/U17, U15, U16, U22/U24) | 18 |
-| test_20_admin_config.py | Phase 2 admin/config screens | 27 |
-| **Total** | | **412** |
+
+| File                             | Area                                                 | Tests   |
+| ---------------------------------- | ------------------------------------------------------ | --------- |
+| test_01_login.py                 | Login and logout                                     | 15      |
+| test_02_navigation.py            | Side menu and breadcrumb                             | 10      |
+| test_03_dashboard.py             | Dashboard                                            | 8       |
+| test_04_ticket_list.py           | Enquiries and Complaints lists                       | 22      |
+| test_05_ticket_filter.py         | Filtering the ticket list                            | 11      |
+| test_06_ticket_detail.py         | Ticket detail screen                                 | 21      |
+| test_06a_investigation.py        | Investigation & Resolution tab                       | 11      |
+| test_06b_customer_records.py     | Customer & Records tab, customer history             | 13      |
+| test_07_kanban.py                | Kanban board                                         | 13      |
+| test_07a_sla.py                  | SLA tab                                              | 10      |
+| test_07b_escalation.py           | Manual escalation                                    | 3       |
+| test_08_create_ticket.py         | Manual ticket creation                               | 22      |
+| test_08b_reply_lifecycle.py      | Ticket lifecycle via replies                         | 10      |
+| test_08c_conditional_fields.py   | Conditional fields on create/edit forms              | 9       |
+| test_09_form_validation.py       | Form validation messages                             | 9       |
+| test_10_modal_form_validation.py | Pop-up form validation                               | 5       |
+| test_12_discarded.py             | Discarded queue                                      | 6       |
+| test_13_admin.py                 | Users, roles and permissions                         | 12      |
+| test_13a_notification.py         | Notification bell                                    | 11      |
+| test_14_reports_audit.py         | Reports, audit trail, ticket history                 | 18      |
+| test_15_role_access.py           | Access control                                       | 9       |
+| test_15_role_matrix.py           | Every role vs every screen and action                | 98      |
+| test_16_department_isolation.py  | Dept POC sees only own department                    | 8       |
+| test_17_role_scope.py            | Which tickets each role can see                      | 8       |
+| test_18_fixed_bug_regression.py  | Bugs already fixed                                   | 5       |
+| test_19_uat_regression.py        | Reopened UAT items (U11, U12/U17, U15, U16, U22/U24) | 18      |
+| test_20_admin_config.py          | Phase 2 admin/config screens                         | 27      |
+| **Total**                        |                                                      | **412** |
 
 ---
 
