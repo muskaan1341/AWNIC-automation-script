@@ -43,33 +43,33 @@ class TestLogin(BaseTest):
     @pytest.mark.smoke
     @pytest.mark.sanity
     def test_valid_email_signs_in_and_lands_on_the_dashboard(self):
-        self.login_as(self.get("agentEmail"))
+        self.login_as(self.get("ccInitiatorEmail"))
 
         # The dashboard is at "/", not "/dashboard".
-        assert self.current_url() == self.base_url + "/", "An agent should land on the dashboard at /"
+        assert self.current_url() == self.base_url + "/", "A CC Initiator should land on the dashboard at /"
 
         self.dashboard.wait_until_loaded()
         assert self.dashboard.is_kpi_displayed("Total Ticket"), "The dashboard tiles should show"
 
     def test_signing_in_works_with_the_keyboard_alone(self):
         self.login.open()
-        self.login.sign_in_with_keyboard_only(self.get("agentEmail"))
+        self.login.sign_in_with_keyboard_only(self.get("ccInitiatorEmail"))
 
         self.wait.until(lambda d: "/login" not in d.current_url)
         assert "/login" not in self.current_url(), "Pressing Enter should submit the form"
-        assert self.top_bar.get_signed_in_email() == self.get("agentEmail"), (
+        assert self.top_bar.get_signed_in_email() == self.get("ccInitiatorEmail"), (
             "The typed account should be signed in"
         )
 
     def test_signed_in_user_sees_their_own_email_in_the_top_bar(self):
-        self.login_as(self.get("agentEmail"))
+        self.login_as(self.get("ccInitiatorEmail"))
 
-        assert self.top_bar.get_signed_in_email() == self.get("agentEmail"), (
+        assert self.top_bar.get_signed_in_email() == self.get("ccInitiatorEmail"), (
             "The top bar should show the signed-in email"
         )
 
     def test_the_greeting_names_the_signed_in_person(self):
-        self.login_as(self.get("agentEmail"))
+        self.login_as(self.get("ccInitiatorEmail"))
         self.dashboard.wait_until_loaded()
 
         # The greeting looks like "Good morning, <name>".
@@ -78,8 +78,8 @@ class TestLogin(BaseTest):
         assert band in ("Good morning", "Good afternoon", "Good evening"), (
             f"Greeting should start with the time of day. Actual: {greeting}"
         )
-        assert name == users.CC_AGENT.name, (
-            f"Greeting should name {users.CC_AGENT.name}. Actual: {greeting}"
+        assert name == users.CC_INITIATOR_ACCOUNT.name, (
+            f"Greeting should name {users.CC_INITIATOR_ACCOUNT.name}. Actual: {greeting}"
         )
 
     # ---------- rejecting bad sign-ins ----------
@@ -172,7 +172,7 @@ class TestLogin(BaseTest):
     @pytest.mark.smoke
     @pytest.mark.sanity
     def test_sign_out_ends_the_session_and_protects_pages_again(self):
-        self.login_as(self.get("agentEmail"))
+        self.login_as(self.get("ccInitiatorEmail"))
         self.top_bar.sign_out()
 
         self.wait_for_url_containing("/login")
@@ -182,7 +182,7 @@ class TestLogin(BaseTest):
         assert "/login" in self.current_url(), "After sign out, a protected page should not open"
 
     def test_an_old_link_does_not_work_after_signing_out(self):
-        self.login_as(self.get("agentEmail"))
+        self.login_as(self.get("ccInitiatorEmail"))
         self.open("/tickets/enquiries")
         self.list.wait_until_loaded()
         page_visited_while_signed_in = self.current_url()

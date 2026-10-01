@@ -30,6 +30,8 @@ class TestTicketDetail(BaseTest):
     # ---------- what the screen shows ----------
 
     @pytest.mark.regression
+    @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_opening_a_ticket_shows_its_reference_number_as_the_heading(self):
         self.open("/tickets/enquiries")
         self.list.wait_until_loaded()

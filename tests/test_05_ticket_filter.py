@@ -15,10 +15,10 @@ pytestmark = [pytest.mark.p1, pytest.mark.phase1, pytest.mark.regression]
 class TestTicketFilter(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
     def sign_in(self, request, browser):
-        request.cls.login_class(request.cls.get("agentEmail"))
+        request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
     def open_enquiries(self):
-        self.login_once(self.get("agentEmail"))
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open("/tickets/enquiries")
         self.list.wait_until_loaded()
 

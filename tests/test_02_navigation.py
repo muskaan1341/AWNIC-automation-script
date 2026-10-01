@@ -3,7 +3,7 @@ The side menu and the breadcrumb.
 
 The menu shape depends on the role:
   - Head of Department / Complaints Manager: a collapsible "Tickets" group
-  - CC Agent / Supervisor: flat entries ("Enquiries Tickets", "Complaint Tickets", ...)
+  - CC Initiator / Supervisor: flat entries ("Enquiries Tickets", "Complaint Tickets", ...)
   - Complaint Handler (one ticket type): a single "Tickets" link
 """
 
@@ -17,7 +17,7 @@ pytestmark = [pytest.mark.p1, pytest.mark.phase1, pytest.mark.regression]
 class TestNavigation(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
     def sign_in(self, request, browser):
-        request.cls.login_class(request.cls.get("agentEmail"))
+        request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
     def open_menu_as(self, email_key):
         self.login_once(self.get(email_key))
@@ -28,10 +28,10 @@ class TestNavigation(BaseTest):
 
     @pytest.mark.smoke
     @pytest.mark.sanity
-    def test_an_agent_gets_flat_ticket_entries(self):
-        self.open_menu_as("agentEmail")
+    def test_a_cc_initiator_gets_flat_ticket_entries(self):
+        self.open_menu_as("ccInitiatorEmail")
 
-        assert not self.nav.has_tickets_group(), "An agent should get flat entries, not a group"
+        assert not self.nav.has_tickets_group(), "A CC Initiator should get flat entries, not a group"
         assert self.nav.has_item("Enquiries Tickets"), "Enquiries entry missing"
         assert self.nav.has_item("Complaint Tickets"), "Complaints entry missing"
         assert self.nav.has_item("Discarded Tickets"), "Discarded entry missing"
@@ -69,7 +69,7 @@ class TestNavigation(BaseTest):
         )
 
     def test_nothing_is_greyed_out_for_any_role(self):
-        for role in ["agentEmail", "hodEmail", "adminEmail", "complaintHandlerEmail"]:
+        for role in ["ccInitiatorEmail", "hodEmail", "adminEmail", "complaintHandlerEmail"]:
             self.open_menu_as(role)
             assert self.nav.disabled_item_count() == 0, (
                 f"Disabled menu items for {self.get(role)}: {self.nav.disabled_item_labels()}"
@@ -77,7 +77,7 @@ class TestNavigation(BaseTest):
 
     @pytest.mark.sanity
     def test_a_role_is_offered_only_the_menu_entries_its_permissions_allow(self):
-        """An agent gets the ticket queues but no admin pages; an admin gets the opposite."""
+        """A CC Initiator gets the ticket queues but no admin pages; an admin gets the opposite."""
         administration = [
             "User Management",
             "Role Management",
@@ -86,17 +86,17 @@ class TestNavigation(BaseTest):
             "Access Management",
         ]
 
-        # Agent
-        self.open_menu_as("agentEmail")
-        agent_menu = self.nav.all_item_labels()
+        # CC Initiator
+        self.open_menu_as("ccInitiatorEmail")
+        initiator_menu = self.nav.all_item_labels()
         for queue in ["Enquiries Tickets", "Complaint Tickets", "Discarded Tickets"]:
-            assert self.nav.has_item(queue), f"Agent should see '{queue}'. Menu: {agent_menu}"
+            assert self.nav.has_item(queue), f"CC Initiator should see '{queue}'. Menu: {initiator_menu}"
 
-        offered_to_agent = []
+        offered_to_initiator = []
         for entry in administration:
             if self.nav.has_item(entry):
-                offered_to_agent.append(entry)
-        assert not offered_to_agent, f"Agent should not see admin entries: {offered_to_agent}"
+                offered_to_initiator.append(entry)
+        assert not offered_to_initiator, f"CC Initiator should not see admin entries: {offered_to_initiator}"
 
         # Admin
         self.open_menu_as("adminEmail")
@@ -107,16 +107,16 @@ class TestNavigation(BaseTest):
             f"Admin should not see any ticket queue. Menu: {admin_menu}"
         )
 
-        assert admin_menu != agent_menu, (
-            f"The two menus should differ. Agent: {agent_menu}. Admin: {admin_menu}"
+        assert admin_menu != initiator_menu, (
+            f"The two menus should differ. CC Initiator: {initiator_menu}. Admin: {admin_menu}"
         )
 
     # ---------- the breadcrumb ----------
-    # The breadcrumb follows the menu shape: an agent sees "Enquiries Tickets",
+    # The breadcrumb follows the menu shape: a CC Initiator sees "Enquiries Tickets",
     # a Head of Department sees "Tickets / Enquiries".
 
-    def test_the_breadcrumb_starts_with_the_agents_flat_queue_label(self):
-        self.login_once(self.get("agentEmail"))
+    def test_the_breadcrumb_starts_with_the_cc_initiators_flat_queue_label(self):
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open("/tickets/enquiries")
         self.list.wait_until_loaded()
 
@@ -133,7 +133,7 @@ class TestNavigation(BaseTest):
         assert "Enquiries" in trail, f"Breadcrumb should include 'Enquiries': {trail}"
 
     def test_opening_a_ticket_adds_its_reference_to_the_breadcrumb(self):
-        self.login_once(self.get("agentEmail"))
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open("/tickets/enquiries")
         self.list.wait_until_loaded()
 

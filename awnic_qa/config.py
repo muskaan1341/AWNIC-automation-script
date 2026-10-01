@@ -42,7 +42,7 @@ class Config:
 
     @classmethod
     def get(cls, key):
-        """A value from the settings, e.g. get("agentEmail")."""
+        """A value from the settings, e.g. get("ccInitiatorEmail")."""
         if key in cls._overrides:
             return cls._overrides[key]
         if key in cls._values:

@@ -73,7 +73,7 @@ class TestFixedBugRegression(BaseTest):
     def test_func_002_another_users_row_still_offers_edit_and_deactivate(self):
         """Another user's row still offers Edit and Deactivate/Reactivate."""
         self.open_user_management()
-        other = users.CC_AGENT.email
+        other = users.CC_INITIATOR_ACCOUNT.email
         labels = self.menu_labels_for(other)
 
         assert "Edit" in labels, f"Edit should be offered for {other}. Menu: {labels}"

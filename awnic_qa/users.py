@@ -1,7 +1,7 @@
 """
 The test accounts: email, name, role and department.
 
-Emails for the accounts named in the settings file (adminEmail, agentEmail, ...) come from
+Emails for the accounts named in the settings file (adminEmail, ccInitiatorEmail, ...) come from
 that file; this module adds the role and department for each one from _KNOWN_ACCOUNTS.
 Role names were worked out from the user / user_roles data, not read from a roles table
 (see ROLES_UNVERIFIED).
@@ -48,9 +48,7 @@ class Account:
 # Name, role and department for every email a settings file may name.
 _KNOWN_ACCOUNTS = {
     "admin@awnic.ae": ("Platform Admin", ADMIN, None),
-    "agent@awnic.ae": ("Aisha Rahman", CC_INITIATOR, None),
     "a_hassouna@awnic.com": ("Ahmed Nabil Saad Hassouna", CC_INITIATOR, None),
-    "supervisor@awnic.ae": ("Omar Farooq", CC_SUPERVISOR, None),
     "supervisor-gen@awnic.com": ("Supervisor-General Inquiry", CC_SUPERVISOR, None),
     "complaints.officer@awnic.ae": ("Leila Nasser", COMPLAINT_HANDLER, None),
     "v_mertia@awnic.com": ("Vikrant Mertia", HEAD_OF_DEPARTMENT, "Broker & Motor Underwriting"),
@@ -78,7 +76,7 @@ def _configured_account(setting_key):
 
 
 PLATFORM_ADMIN = _configured_account("adminEmail")
-CC_AGENT = _configured_account("agentEmail")
+CC_INITIATOR_ACCOUNT = _configured_account("ccInitiatorEmail")
 CC_SUPERVISOR_ACCOUNT = _configured_account("supervisorEmail")
 COMPLAINT_HANDLER_ACCOUNT = _configured_account("complaintHandlerEmail")
 
@@ -120,7 +118,7 @@ ISOLATION_PAIR = (DEPT_POC_MEDICAL_OPS, DEPT_POC_FINANCE)
 
 ALL = (
     PLATFORM_ADMIN,
-    CC_AGENT,
+    CC_INITIATOR_ACCOUNT,
     CC_SUPERVISOR_ACCOUNT,
     UNGRANTED_HOD,
     UNGRANTED_COMPLAINTS_MANAGER,

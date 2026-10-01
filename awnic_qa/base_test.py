@@ -7,7 +7,7 @@ has the helpers every test needs: open(), login_as(), clear_session(), and so on
     class TestSomething(BaseTest):
         @pytest.fixture(scope="class", autouse=True)
         def sign_in(self, request, browser):
-            request.cls.login_class(request.cls.get("agentEmail"))
+            request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
         def test_something(self):
             self.open("/")
@@ -128,7 +128,7 @@ class BaseTest:
 
     @staticmethod
     def get(key):
-        """A value from the settings file, e.g. get("agentEmail")."""
+        """A value from the settings file, e.g. get("ccInitiatorEmail")."""
         return Config.get(key)
 
     @staticmethod

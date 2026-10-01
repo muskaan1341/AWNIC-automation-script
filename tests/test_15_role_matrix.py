@@ -57,17 +57,17 @@ ROLE_SCREENS = [
     ("supervisorEmail", "CC Supervisor", "/user-management", False),
     # PR #186: cc_supervisor holds no configure_* key, so System Settings is refused.
     ("supervisorEmail", "CC Supervisor", "/admin/settings", False),
-    # CC Initiator (agent): no management screens
-    ("agentEmail", "CC Initiator", "/tickets/enquiries", True),
-    ("agentEmail", "CC Initiator", "/tickets/complaints", True),
-    ("agentEmail", "CC Initiator", "/tickets/discarded", True),
-    ("agentEmail", "CC Initiator", "/tickets/enquiries/new", True),
-    ("agentEmail", "CC Initiator", "/reports", False),
-    ("agentEmail", "CC Initiator", "/audit-trail", False),
-    ("agentEmail", "CC Initiator", "/history", True),
-    ("agentEmail", "CC Initiator", "/teams-sla", False),
-    ("agentEmail", "CC Initiator", "/user-management", False),
-    ("agentEmail", "CC Initiator", "/admin/settings", False),
+    # CC Initiator: no management screens
+    ("ccInitiatorEmail", "CC Initiator", "/tickets/enquiries", True),
+    ("ccInitiatorEmail", "CC Initiator", "/tickets/complaints", True),
+    ("ccInitiatorEmail", "CC Initiator", "/tickets/discarded", True),
+    ("ccInitiatorEmail", "CC Initiator", "/tickets/enquiries/new", True),
+    ("ccInitiatorEmail", "CC Initiator", "/reports", False),
+    ("ccInitiatorEmail", "CC Initiator", "/audit-trail", False),
+    ("ccInitiatorEmail", "CC Initiator", "/history", True),
+    ("ccInitiatorEmail", "CC Initiator", "/teams-sla", False),
+    ("ccInitiatorEmail", "CC Initiator", "/user-management", False),
+    ("ccInitiatorEmail", "CC Initiator", "/admin/settings", False),
     # Complaint Handler: complaints only
     ("complaintHandlerEmail", "Complaint Handler", "/tickets/enquiries", False),
     ("complaintHandlerEmail", "Complaint Handler", "/tickets/complaints", True),
@@ -127,9 +127,9 @@ ROLE_ACTIONS = [
     ("supervisorEmail", "CC Supervisor", "Reassign", True),
     ("supervisorEmail", "CC Supervisor", "Manual Escalation", True),
     ("supervisorEmail", "CC Supervisor", "Move to Discarded", True),
-    ("agentEmail", "CC Initiator", "Manual Escalation", False),
-    ("agentEmail", "CC Initiator", "Reassign", False),
-    ("agentEmail", "CC Initiator", "Move to Discarded", False),
+    ("ccInitiatorEmail", "CC Initiator", "Manual Escalation", False),
+    ("ccInitiatorEmail", "CC Initiator", "Reassign", False),
+    ("ccInitiatorEmail", "CC Initiator", "Move to Discarded", False),
     ("complianceEmail", "Compliance Officer", "Reassign", False),
     ("complianceEmail", "Compliance Officer", "Manual Escalation", False),
     ("complianceEmail", "Compliance Officer", "Move to Discarded", False),
@@ -144,8 +144,8 @@ ROLE_ACTIONS = [
 _BLOCKED_ACCOUNT = {
     "complianceEmail": "compliance_officer",
 }
-# The agent's screen rows are also part of the sanity run.
-_SANITY_ACCOUNT = "agentEmail"
+# The CC Initiator's screen rows are also part of the sanity run.
+_SANITY_ACCOUNT = "ccInitiatorEmail"
 # Screens added by Phase 2 (PR #186). Every other row is Phase 1.
 _PHASE2_SCREENS = ["/admin/settings"]
 

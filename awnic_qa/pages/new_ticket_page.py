@@ -21,7 +21,7 @@ from awnic_qa.pages.base_page import BasePage
 
 
 class NewTicketPage(BasePage):
-    # Every channel an agent can pick, in the order the form lists them.
+    # Every channel a CC Initiator can pick, in the order the form lists them.
     SOURCE_OPTIONS = [
         "Walk-in",
         "Phone",

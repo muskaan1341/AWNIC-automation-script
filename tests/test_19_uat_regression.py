@@ -145,14 +145,14 @@ class TestUatRegression(BaseTest):
         return None
 
     def discover_own_in_progress(self):
-        """Returns up to 3 (reference, url, menu labels) for In Progress tickets owned by the agent.
+        """Returns up to 3 (reference, url, menu labels) for In Progress tickets owned by the CC Initiator.
 
         Only In Progress tickets are opened - opening your own New ticket would change it.
         """
         cls = type(self)
         if cls._own_in_progress is not None:
             return cls._own_in_progress
-        agent = self.get("agentEmail").lower()
+        initiator_email = self.get("ccInitiatorEmail").lower()
         candidates = []
         for queue in (ENQUIRIES, COMPLAINTS):
             self.open_list(queue)
@@ -166,7 +166,7 @@ class TestUatRegression(BaseTest):
                 break
             self.driver.get(url)
             self.detail.wait_until_loaded()
-            if self.detail.cc_initiator_email().lower() != agent:
+            if self.detail.cc_initiator_email().lower() != initiator_email:
                 continue
             owned.append((reference, url, self.detail.more_action_labels()))
         cls._own_in_progress = owned
@@ -416,19 +416,19 @@ class TestUatRegression(BaseTest):
     @pytest.mark.rbac
     def test_u22_the_cc_initiator_menu_on_their_own_ticket(self):
         """U22/U24: the CC Initiator's own ticket offers Assign the Ticket and Resolve, but not Reassign."""
-        # Signed in as the agent: this checks the menu of the ticket's own CC Initiator.
-        self.login_once(self.get("agentEmail"))
+        # Signed in as the CC Initiator: this checks the menu of the ticket's own CC Initiator.
+        self.login_once(self.get("ccInitiatorEmail"))
         self.require_ticket_access()
         owned = self.discover_own_in_progress()
         if not owned:
-            pytest.skip(f"No In Progress ticket on UAT has {self.get('agentEmail')} as its CC Initiator.")
+            pytest.skip(f"No In Progress ticket on UAT has {self.get('ccInitiatorEmail')} as its CC Initiator.")
 
         with_assign = []
         for reference, url, labels in owned:
             if ASSIGN_THE_TICKET in labels:
                 with_assign.append((reference, url, labels))
         if not with_assign:
-            pytest.skip(f"None of the agent's In Progress tickets offers Assign the Ticket. Menus: {owned}")
+            pytest.skip(f"None of the CC Initiator's In Progress tickets offers Assign the Ticket. Menus: {owned}")
         reference, url, offered = with_assign[0]
         self.driver.get(url)
         self.detail.wait_until_loaded()
@@ -448,11 +448,11 @@ class TestUatRegression(BaseTest):
     @pytest.mark.rbac
     def test_u22_the_cc_initiator_is_offered_reclassify_inside_the_window(self):
         """U22: the CC Initiator is offered the swap to the other type (enquiry <-> complaint)."""
-        self.login_once(self.get("agentEmail"))
+        self.login_once(self.get("ccInitiatorEmail"))
         self.require_ticket_access()
         owned = self.discover_own_in_progress()
         if not owned:
-            pytest.skip(f"No In Progress ticket on UAT is owned by {self.get('agentEmail')}.")
+            pytest.skip(f"No In Progress ticket on UAT is owned by {self.get('ccInitiatorEmail')}.")
 
         swaps = ("Reclassify as Complaint", "Reclassify as Enquiry")
         reclassifiable = []
@@ -463,7 +463,7 @@ class TestUatRegression(BaseTest):
                     reclassifiable.append(ticket)
                     break
         if not reclassifiable:
-            pytest.skip(f"None of the agent's tickets can be reclassified now. Menus: {owned}")
+            pytest.skip(f"None of the CC Initiator's tickets can be reclassified now. Menus: {owned}")
 
         reference, _, offered = reclassifiable[0]
         prefix = reference[:3]
@@ -477,14 +477,14 @@ class TestUatRegression(BaseTest):
     @pytest.mark.rbac
     def test_u22_assign_the_ticket_offers_both_modes_and_a_copy_field(self):
         """U22: the Assign the Ticket box offers both "Assign to" options and a Copy field (then cancelled)."""
-        self.login_once(self.get("agentEmail"))
+        self.login_once(self.get("ccInitiatorEmail"))
         self.require_ticket_access()
         owned = []
         for ticket in self.discover_own_in_progress():
             if ASSIGN_THE_TICKET in ticket[2]:
                 owned.append(ticket)
         if not owned:
-            pytest.skip("No In Progress ticket owned by the agent offers Assign the Ticket.")
+            pytest.skip("No In Progress ticket owned by the CC Initiator offers Assign the Ticket.")
         self.driver.get(owned[0][1])
         self.detail.wait_until_loaded()
 

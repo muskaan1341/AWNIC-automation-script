@@ -4,7 +4,7 @@ Which items appear depends on the signed-in user's role.
 
 The menu has three shapes:
   - Head of Department / Complaints Manager: a collapsible "Tickets" group
-  - CC Agent / Supervisor: flat items "Enquiries Tickets", "Complaint Tickets", "Discarded Tickets"
+  - CC Initiator / Supervisor: flat items "Enquiries Tickets", "Complaint Tickets", "Discarded Tickets"
   - Complaint Handler: a single "Tickets" link
 No item is greyed out any more, so the expected number of disabled items is zero.
 """

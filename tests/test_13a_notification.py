@@ -15,11 +15,11 @@ pytestmark = [pytest.mark.p2, pytest.mark.phase1]
 class TestNotification(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
     def sign_in(self, request, browser):
-        request.cls.login_class(request.cls.get("agentEmail"))
+        request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
     def open_dashboard(self):
-        # Some tests sign in as someone else, so sign back in as the agent first.
-        self.login_once(self.get("agentEmail"))
+        # Some tests sign in as someone else, so sign back in as the CC Initiator first.
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open("/")
         self.dashboard.wait_until_loaded()
 
@@ -27,6 +27,7 @@ class TestNotification(BaseTest):
 
     @pytest.mark.regression
     @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_the_bell_opens_and_closes_the_panel(self):
         self.open_dashboard()
 
@@ -105,7 +106,7 @@ class TestNotification(BaseTest):
             )
         finally:
             # Sign back in so the next test does not start on the login page.
-            self.login_as(self.get("agentEmail"))
+            self.login_as(self.get("ccInitiatorEmail"))
 
     # ---------- the unread badge and the links ----------
 
@@ -202,19 +203,19 @@ class TestNotification(BaseTest):
 
     @pytest.mark.regression
     def test_you_are_shown_only_your_own_notifications(self):
-        """No ticket link appears in both the agent's and the admin's notifications."""
+        """No ticket link appears in both the CC Initiator's and the admin's notifications."""
         self.open_dashboard()
         self.top_bar.open_notifications()
-        agent_hrefs = sorted(self.top_bar.notification_hrefs())
+        initiator_hrefs = sorted(self.top_bar.notification_hrefs())
 
         self.login_once(self.get("adminEmail"))
         self.open_and_wait("/admin")
         self.top_bar.open_notifications()
         admin_hrefs = sorted(self.top_bar.notification_hrefs())
 
-        if not agent_hrefs and not admin_hrefs:
+        if not initiator_hrefs and not admin_hrefs:
             pytest.skip("Neither account has notifications here, so there is nothing to compare.")
-        shared = sorted(set(agent_hrefs) & set(admin_hrefs))
+        shared = sorted(set(initiator_hrefs) & set(admin_hrefs))
         assert not shared, (
-            f"Shown to both accounts: {shared}. Agent: {agent_hrefs}. Admin: {admin_hrefs}."
+            f"Shown to both accounts: {shared}. CC Initiator: {initiator_hrefs}. Admin: {admin_hrefs}."
         )

@@ -17,7 +17,7 @@ pytestmark = [pytest.mark.p1, pytest.mark.phase1]
 class TestDashboard(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
     def sign_in(self, request, browser):
-        request.cls.login_class(request.cls.get("agentEmail"))
+        request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
     def open_dashboard(self):
         self.open("/")

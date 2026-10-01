@@ -61,6 +61,7 @@ class TestReportsAudit(BaseTest):
 
     @pytest.mark.regression
     @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_the_report_opens_for_a_manager(self):
         self.login_once(self.get("hodEmail"))
         self.open_and_wait("/reports")

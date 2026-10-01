@@ -145,7 +145,7 @@ class TestReplyLifecycle(BaseTest):
         assert self.reply.is_send_enabled(), "A real reply should enable Send Reply"
         # Send is NOT pressed - it would email a real customer.
 
-    def test_step3e_the_agent_is_told_which_mailbox_the_reply_leaves_from(self):
+    def test_step3e_the_cc_initiator_is_told_which_mailbox_the_reply_leaves_from(self):
         """The composer names the mailbox the reply is sent from."""
         self.login_once(self.get("supervisorEmail"))
         self.open_an_email_ticket()

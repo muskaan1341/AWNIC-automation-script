@@ -30,6 +30,7 @@ class TestAdmin(BaseTest):
     # ---------- the user list ----------
 
     @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_the_user_table_shows_the_agreed_columns(self):
         self.open_user_management()
 
@@ -47,7 +48,7 @@ class TestAdmin(BaseTest):
         first_page = self.admin.get_listed_emails()
         assert first_page, "The organisation-wide list should show users"
 
-        wanted = self.get("agentEmail")
+        wanted = self.get("ccInitiatorEmail")
         self.admin.search(wanted)
         try:
             self.wait.until(lambda d: self.admin.lists_user(wanted))
@@ -63,7 +64,7 @@ class TestAdmin(BaseTest):
         """Searching one user's full email leaves exactly that user."""
         self.open_user_management()
 
-        wanted = self.get("agentEmail")
+        wanted = self.get("ccInitiatorEmail")
         self.admin.search(wanted)
         # The search runs while typing, so wait for the final result.
         try:
@@ -84,7 +85,7 @@ class TestAdmin(BaseTest):
         self.wait.until(lambda d: self.admin.get_listed_emails() != before)
 
         # An empty table or a single "no users found" row are both fine.
-        assert not self.admin.lists_user(self.get("agentEmail")), (
+        assert not self.admin.lists_user(self.get("ccInitiatorEmail")), (
             "A search with no match must not leave real users on screen"
         )
         assert self.admin.get_row_count() <= 1, (

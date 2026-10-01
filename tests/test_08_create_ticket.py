@@ -22,7 +22,7 @@ pytestmark = [pytest.mark.regression]
 class TestCreateTicket(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
     def sign_in(self, request, browser):
-        request.cls.login_class(request.cls.get("agentEmail"))
+        request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
     def open_enquiry_form(self):
         """Opens the create screen and skips the customer search."""
@@ -103,7 +103,7 @@ class TestCreateTicket(BaseTest):
         self.open_enquiry_form()
 
         assert self.new_ticket.get_dropdown_options("Source") == NewTicketPage.SOURCE_OPTIONS, (
-            "The Source list should offer every channel an agent can log by hand"
+            "The Source list should offer every channel a CC Initiator can log by hand"
         )
 
     def test_choosing_walk_in_reveals_the_reason_field(self):
@@ -350,6 +350,8 @@ class TestCcInitiatorPicker(BaseTest):
             "data, so this case cannot be checked here."
         )
 
+    @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_r40_each_channel_offers_exactly_its_in_rotation_initiators(self):
         """Each channel lists its Available and At-limit members, and only the At-limit ones are disabled."""
         roster = self.read_roster()

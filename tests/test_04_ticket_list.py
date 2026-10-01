@@ -1,7 +1,7 @@
 """
 The Enquiries and Complaints ticket lists.
 
-Both lists are the same screen with different data. Signed in as a Customer Care agent.
+Both lists are the same screen with different data. Signed in as a CC Initiator.
 Filters are tested in test_05_ticket_filter.py.
 """
 
@@ -18,11 +18,11 @@ pytestmark = [pytest.mark.p1, pytest.mark.phase1]
 class TestTicketList(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
     def sign_in(self, request, browser):
-        request.cls.login_class(request.cls.get("agentEmail"))
+        request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
     def open_enquiries(self):
-        # Sign in again as the agent, because one test in this class switches to a HOD.
-        self.login_once(self.get("agentEmail"))
+        # Sign in again as the CC Initiator, because one test in this class switches to a HOD.
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open("/tickets/enquiries")
         self.list.wait_until_loaded()
 
@@ -35,7 +35,7 @@ class TestTicketList(BaseTest):
         )
 
     def open_complaints(self):
-        self.login_once(self.get("agentEmail"))
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open("/tickets/complaints")
         self.list.wait_until_loaded()
 
@@ -321,7 +321,7 @@ class TestTicketList(BaseTest):
     def test_switching_to_my_tickets_shows_only_tickets_assigned_to_me(self):
         """'My Tickets' shows only tickets whose Current Handler is me."""
         self.open_enquiries()
-        me = users.by_email(self.get("agentEmail"))
+        me = users.by_email(self.get("ccInitiatorEmail"))
         organisation_wide_total = self.list.get_reported_result_count()
 
         self.list.select_tab("My Tickets")
@@ -351,6 +351,7 @@ class TestTicketList(BaseTest):
 
     @pytest.mark.regression
     @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_clicking_a_row_opens_that_tickets_detail_page(self):
         self.open_enquiries()
         self.list.open_first_row()
@@ -361,10 +362,10 @@ class TestTicketList(BaseTest):
         )
 
     @pytest.mark.regression
-    def test_agent_sees_the_create_enquiry_button(self):
+    def test_a_cc_initiator_sees_the_create_enquiry_button(self):
         self.open_enquiries()
 
-        assert self.list.has_button("Create Enquiry"), "The agent should see 'Create Enquiry'"
+        assert self.list.has_button("Create Enquiry"), "The CC Initiator should see 'Create Enquiry'"
 
     @pytest.mark.regression
     def test_opening_a_ticket_that_does_not_exist_shows_the_not_found_screen(self):

@@ -20,10 +20,10 @@ REASON = "Reason for Walk-in"
 class TestConditionalFields(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
     def sign_in(self, request, browser):
-        request.cls.login_class(request.cls.get("agentEmail"))
+        request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
     def open_form(self, kind):
-        self.login_once(self.get("agentEmail"))
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open(f"/tickets/{kind}/new")
         self.new_ticket.continue_to_form()
 
@@ -39,7 +39,7 @@ class TestConditionalFields(BaseTest):
     @pytest.mark.parametrize("kind", ["enquiries", "complaints"])
     def test_r32_customer_search_comes_first_then_the_form_in_its_five_sections(self, kind):
         """The customer search comes first, then the form with its five sections in order."""
-        self.login_once(self.get("agentEmail"))
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open(f"/tickets/{kind}/new")
         self.wait.until(lambda d: self.new_ticket.is_customer_search_displayed())
 

@@ -16,12 +16,12 @@ pytestmark = [pytest.mark.p1, pytest.mark.phase1]
 class TestSla(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
     def sign_in(self, request, browser):
-        # Signs in as the CC agent: on the shared site it is the ticket-viewing account with a role.
-        request.cls.login_class(request.cls.get("agentEmail"))
+        # Signs in as the CC Initiator: on the shared site it is the ticket-viewing account with a role.
+        request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
     def open_sla_tab_of_first_ticket(self, list_path):
         """Opens the first ticket on a list and switches to its SLA tab."""
-        self.require_ticket_access("agentEmail")
+        self.require_ticket_access("ccInitiatorEmail")
         self.open(list_path)
         self.list.wait_until_loaded()
         if self.list.get_row_count() == 0:

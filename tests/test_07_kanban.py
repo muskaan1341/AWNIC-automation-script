@@ -42,6 +42,8 @@ class TestKanban(BaseTest):
     # ---------- the board itself ----------
 
     @pytest.mark.regression
+    @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_the_board_shows_exactly_the_four_agreed_columns(self):
         self.open_board()
 

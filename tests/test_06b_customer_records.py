@@ -238,6 +238,8 @@ class TestCustomerRecords(BaseTest):
     @pytest.mark.phase2
     @pytest.mark.regression
     @pytest.mark.p1
+    @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_r22_the_history_module_shows_a_customers_tickets_grouped_and_on_a_timeline(self):
         """Open /history for a real policy and check the Grouped and Timeline views."""
         self.require_ticket_access()

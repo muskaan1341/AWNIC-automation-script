@@ -102,6 +102,8 @@ class TestAdminConfig(BaseTest):
 
     @pytest.mark.p1
     @pytest.mark.rbac
+    @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_r46_the_head_of_department_sees_the_archive_with_import_and_template(self):
         """R46: the HOD sees the archive with Download template and Import (nothing is pressed)."""
         self.as_("hodEmail")
@@ -166,7 +168,7 @@ class TestAdminConfig(BaseTest):
     @pytest.mark.negative
     def test_r46_a_cc_initiator_has_no_archive_at_all(self):
         """R46: a CC Initiator gets no archive nav item and is refused the page."""
-        self.as_("agentEmail")
+        self.as_("ccInitiatorEmail")
         self.open_and_wait("/")
         self.nav.wait_until_loaded()
         assert not self.nav.has_item("Historical Complaints"), (
@@ -248,6 +250,8 @@ class TestAdminConfig(BaseTest):
         assert not self.is_access_denied(), f"{self.signed_in_as} should reach {TEAMS_SLA}"
 
     @pytest.mark.p1
+    @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_r40_every_teams_and_sla_tab_renders(self):
         """R40: all seven Teams & SLA tabs are shown in order and each has content."""
         self.as_("hodEmail")
@@ -425,6 +429,7 @@ class TestConfigEditors(BaseTest):
 
     @pytest.mark.p1
     @pytest.mark.sanity
+    @pytest.mark.smoke
     def test_r40_the_escalation_ladder_shows_the_non_motor_and_motor_chains(self):
         """R18/R19: Non-Motor shows a 3-rung chain, Motor a 4-rung chain."""
         self.open_tab("hodEmail", "Escalation Ladder")

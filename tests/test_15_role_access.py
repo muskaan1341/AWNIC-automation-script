@@ -14,8 +14,8 @@ pytestmark = [pytest.mark.p0, pytest.mark.phase1, pytest.mark.regression]
 
 class TestRoleAccess(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
-    def start_from_the_agent(self, request, browser):
-        request.cls.login_class(request.cls.get("agentEmail"))
+    def start_from_the_cc_initiator(self, request, browser):
+        request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
     # ---------- complaint handler: only complaints assigned to them ----------
 
@@ -49,14 +49,14 @@ class TestRoleAccess(BaseTest):
                 f"'{self.detail.department_poc_email()}'"
             )
 
-        # The agent sees all complaints, so the handler cannot have more.
-        self.login_once(self.get("agentEmail"))
+        # The CC Initiator sees all complaints, so the handler cannot have more.
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open("/tickets/complaints")
         self.list.wait_until_loaded()
         organisation_wide = self.list.get_reported_result_count()
 
         assert their_total <= organisation_wide, (
-            f"Handler sees {their_total} complaints but the agent sees only {organisation_wide}"
+            f"Handler sees {their_total} complaints but the CC Initiator sees only {organisation_wide}"
         )
 
     def test_complaint_handler_gets_no_scope_tabs(self):
@@ -146,9 +146,9 @@ class TestRoleAccess(BaseTest):
         assert self.list.get_row_count() > 0, "The complaints list should not be empty"
 
     @pytest.mark.sanity
-    def test_an_agent_is_refused_every_screen_their_role_does_not_cover(self):
-        """Typing an admin-only URL as an agent is refused."""
-        self.login_once(self.get("agentEmail"))
+    def test_a_cc_initiator_is_refused_every_screen_their_role_does_not_cover(self):
+        """Typing an admin-only URL as a CC Initiator is refused."""
+        self.login_once(self.get("ccInitiatorEmail"))
 
         forbidden = [
             "/user-management",
@@ -165,7 +165,7 @@ class TestRoleAccess(BaseTest):
                 or self.is_page_not_found()
                 or path not in self.current_url()
             ), (
-                f"The agent reached {path}. URL: {self.current_url()} - "
+                f"The CC Initiator reached {path}. URL: {self.current_url()} - "
                 f"page says: {self.page_text_snippet()}"
             )
 
@@ -173,8 +173,8 @@ class TestRoleAccess(BaseTest):
         """Every tab of a complaint not assigned to the handler is refused."""
         owned_by_them = self.reference("COM", self.get("complaintHandlerTicketTail"))
 
-        # Step 1: as the agent (sees everything), find a complaint that is not the handler's.
-        self.login_once(self.get("agentEmail"))
+        # Step 1: as the CC Initiator (sees everything), find a complaint that is not the handler's.
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open("/tickets/complaints")
         self.list.wait_until_loaded()
 

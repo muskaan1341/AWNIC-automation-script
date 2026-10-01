@@ -18,15 +18,15 @@ pytestmark = [pytest.mark.p2, pytest.mark.phase1, pytest.mark.regression]
 class TestFormValidation(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
     def sign_in(self, request, browser):
-        request.cls.login_class(request.cls.get("agentEmail"))
+        request.cls.login_class(request.cls.get("ccInitiatorEmail"))
 
     def open_enquiry_form(self):
-        self.login_once(self.get("agentEmail"))
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open("/tickets/enquiries/new")
         self.new_ticket.continue_to_form()
 
     def open_complaint_form(self):
-        self.login_once(self.get("agentEmail"))
+        self.login_once(self.get("ccInitiatorEmail"))
         self.open("/tickets/complaints/new")
         self.new_ticket.continue_to_form()
 

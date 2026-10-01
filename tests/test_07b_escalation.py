@@ -86,8 +86,8 @@ class TestEscalation(BaseTest):
     @pytest.mark.phase1
     def test_an_escalated_ticket_cannot_be_moved_by_hand(self):
         """Escalated cards cannot be dragged, while other cards on the same board can."""
-        # The CC agent (initiator) can also move cards, and has a role on UAT.
-        self.login_once(self.get("agentEmail"))
+        # The CC Initiator can also move cards, and has a role on UAT.
+        self.login_once(self.get("ccInitiatorEmail"))
 
         escalated = []
         movable = 0

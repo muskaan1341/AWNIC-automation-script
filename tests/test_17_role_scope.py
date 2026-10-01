@@ -14,7 +14,7 @@ pytestmark = [pytest.mark.p1, pytest.mark.phase1]
 
 
 # Two org-wide accounts (kept to two because sign-in is rate-limited).
-ORG_WIDE_ACCOUNTS = [users.CC_AGENT, users.HOD_BROKER_MOTOR]
+ORG_WIDE_ACCOUNTS = [users.CC_INITIATOR_ACCOUNT, users.HOD_BROKER_MOTOR]
 
 # Accounts that can sign in but hold no role.
 ROLELESS_ACCOUNTS = [
@@ -98,8 +98,8 @@ class TestRoleScope(BaseTest):
 
     @pytest.mark.regression
     def test_a_scoped_role_is_offered_fewer_views_than_an_org_wide_one(self):
-        """The org-wide agent gets "Organization Tickets"; a Department POC gets no tabs."""
-        self.login_once(users.CC_AGENT.email)
+        """The org-wide CC Initiator gets "Organization Tickets"; a Department POC gets no tabs."""
+        self.login_once(users.CC_INITIATOR_ACCOUNT.email)
         self.open(ENQUIRIES)
         self.list.wait_until_loaded()
         org_wide_tabs = self.list.get_tab_labels()
@@ -110,7 +110,7 @@ class TestRoleScope(BaseTest):
         scoped_tabs = self.list.get_tab_labels()
 
         assert "Organization Tickets" in org_wide_tabs, (
-            f"The agent should get the Organization Tickets tab. Tabs: {org_wide_tabs}"
+            f"The CC Initiator should get the Organization Tickets tab. Tabs: {org_wide_tabs}"
         )
         assert scoped_tabs == [], f"A dept_poc should get no tabs. Offered: {scoped_tabs}"
 
