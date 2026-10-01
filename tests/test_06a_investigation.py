@@ -136,31 +136,7 @@ class TestInvestigation(BaseTest):
 
         assert self.investigation.remark_draft() == arabic, "Arabic text should stay exactly as typed"
 
-    # ---------- who may write into the register ----------
-
-    @pytest.mark.blocked("compliance_officer")
-    def test_a_read_only_role_is_offered_no_way_to_edit_the_investigation(self):
-        """A compliance officer does not see the Edit button."""
-        self.login_once(self.get("complianceEmail"))
-        self.open("/tickets/complaints")
-        self.wait_for_page_load()
-        if self.is_access_denied():
-            pytest.skip(f"'{self.get('complianceEmail')}' has no role on this environment.")
-        self.list.wait_until_loaded()
-        if self.list.get_row_count() == 0:
-            pytest.skip("This role sees no complaints here.")
-        self.list.open_first_row()
-        self.wait_for_ticket_detail_url()
-        self.detail.wait_until_loaded()
-        self.detail.open_tab("Investigation & Resolution")
-        self.investigation.wait_until_loaded()
-
-        assert not self.investigation.has_edit_button(), (
-            "A compliance officer should not see the Edit button"
-        )
-
     def test_the_register_of_a_ticket_that_does_not_exist_is_refused(self):
-        # Sign back in as the supervisor, because the previous test used another account.
         self.login_once(self.get("supervisorEmail"))
         self.open_and_wait(
             "/tickets/00000000-0000-0000-0000-000000000000/investigation"

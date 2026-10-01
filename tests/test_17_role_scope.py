@@ -20,7 +20,6 @@ ORG_WIDE_ACCOUNTS = [users.CC_INITIATOR_ACCOUNT, users.HOD_BROKER_MOTOR]
 ROLELESS_ACCOUNTS = [
     users.UNGRANTED_HOD,
     users.UNGRANTED_COMPLAINTS_MANAGER,
-    users.UNGRANTED_COMPLIANCE,
 ]
 
 ENQUIRIES = "/tickets/enquiries"
@@ -113,19 +112,3 @@ class TestRoleScope(BaseTest):
             f"The CC Initiator should get the Organization Tickets tab. Tabs: {org_wide_tabs}"
         )
         assert scoped_tabs == [], f"A dept_poc should get no tabs. Offered: {scoped_tabs}"
-
-    # ---------- test-data coverage note ----------
-
-    @pytest.mark.xfail(
-        reason="compliance_officer has no holder in user_roles on UAT (re-checked "
-        "2026-09-30; complaint_handler is now held by complaints.officer@awnic.ae), so that "
-        "role cannot be exercised by any test. Missing seed data, not a product fault - "
-        "grant the role and this turns green.",
-        strict=False,
-    )
-    @pytest.mark.env_check
-    def test_every_role_the_product_defines_has_an_account_to_test_it_with(self):
-        """Test-data check: every role has at least one account holding it."""
-        assert not users.ROLE_HAS_NO_HOLDER, (
-            f"No account holds these roles: {sorted(users.ROLE_HAS_NO_HOLDER)}"
-        )

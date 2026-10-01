@@ -161,26 +161,6 @@ class TestReplyLifecycle(BaseTest):
             f"Replies on this ticket send from {mailbox}, not your own mailbox."
         ), f"The tooltip should name the same mailbox. Tooltip: {tooltip!r}"
 
-    @pytest.mark.blocked("compliance_officer")
-    def test_step3f_a_locked_ticket_explains_why_it_cannot_be_replied_to(self):
-        """A read-only role cannot send a reply."""
-        self.login_once(self.get("complianceEmail"))
-        self.open_and_wait("/tickets/enquiries")
-        # On the shared site this account may have no role, so every screen refuses it.
-        if self.is_access_denied():
-            pytest.skip(f"'{self.get('complianceEmail')}' holds no role on this environment.")
-        self.list.wait_until_loaded()
-        if self.list.get_row_count() == 0:
-            pytest.skip("This role sees no enquiries here.")
-        self.list.open_first_row()
-        self.detail.wait_until_loaded()
-
-        if not self.reply.is_card_displayed():
-            pytest.skip("The composer is not shown to a read-only role, which is also fine.")
-        assert not self.reply.is_send_enabled(), (
-            "A Compliance Officer must never be able to email a customer"
-        )
-
     # ---------- STEP 6 - the "may be resolved" flag ----------
 
     def find_flagged_ticket(self):

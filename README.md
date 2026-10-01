@@ -192,7 +192,6 @@ Both settings files use the same accounts. All are active and hold exactly one r
 | `hodEmail`              | `v_mertia@awnic.com`          | Head of Department (Broker & Motor Underwriting)                      |
 | `managerEmail`          | `c_chiong@awnic.com`          | Manager (Business Support)                                            |
 | `deptPocEmail`          | `a_shalaby@awnic.com`         | Dept POC (Medical Operations)                                         |
-| `complianceEmail`       | `compliance@awnic.ae`         | Compliance Officer -**account does not exist yet**, so its tests skip |
 
 To use a different person for a role, change the email in the settings file **and** add that
 email to `_KNOWN_ACCOUNTS` in `awnic_qa/users.py` (name, role, department). Pick someone who is
@@ -207,19 +206,32 @@ Never use `dev@awnic.ae` - it is reserved.
 Every test has labels (markers). Use `-m` to choose which ones run.
 
 
-| Marker                       | Meaning                                                          | Tests    |
-| ------------------------------ | ------------------------------------------------------------------ | ---------- |
-| `smoke`                      | "is the app working?" - quick check                              | 25       |
-| `sanity`                     | each main area once (includes smoke)                             | 67       |
-| `regression`                 | the full suite                                                   | 387      |
-| `regression and not blocked` | the full run you can actually execute                            | 359      |
-| `phase1` / `phase2`          | which project phase the feature belongs to                       | 357 / 55 |
-| `p0` / `p1` / `p2`           | priority (p0 = most important)                                   |          |
-| `blocked`                    | can't run yet (e.g. no account for that role) - shows the reason | 29       |
-| `quarantine`                 | a known app defect - expected to fail until it is fixed          | 11       |
-| `write`                      | changes data - always skipped unless`writeTestsEnabled=true`     | 3        |
+| Marker | Meaning | Tests |
+| --- | --- | --- |
+| `smoke` | "is the app working?" - quick check | 25 |
+| `sanity` | each main area once (includes smoke) | 67 |
+| `regression` | the full suite (includes the 9 blocked tests) | 368 |
+| `regression and not blocked` | the full suite **minus the 9 blocked tests** - use this one | 359 |
+| `phase1` / `phase2` | which project phase the feature belongs to | 337 / 54 |
+| `p0` / `p1` / `p2` | priority (p0 = most important) | |
+| `blocked` | can't run safely on UAT yet - see below | 9 |
+| `quarantine` | a known app defect - expected to fail until it is fixed | 10 |
+| `write` | changes data - always skipped unless `writeTestsEnabled=true` | 3 |
 
-**Total: 412 tests.** The full list of markers is in `pytest.ini`.
+**Total: 391 tests.** The full list of markers is in `pytest.ini`.
+
+### Why `"regression and not blocked"` and not just `regression`?
+
+`regression` also picks up the 9 **blocked** tests. They can't give a useful result on the
+shared UAT site, and some are not safe there:
+
+| Blocked reason | Tests | Why it is left out |
+| --- | --- | --- |
+| `shared_uat_no_drag` | 3 | They really drag a Kanban card. On shared UAT a drop that lands one column off would move a real ticket. |
+| `tier1_window` | 4 | They need a ticket that is still inside its first-level (Tier 1) window; UAT rarely has one, so they fail for a data reason. |
+| `roleless_account` | 2 | They need accounts with no role, which don't exist on UAT. |
+
+So `-m "regression and not blocked"` = everything that is safe and able to run.
 
 ---
 
@@ -233,14 +245,14 @@ Every test has labels (markers). Use `-m` to choose which ones run.
 | test_03_dashboard.py             | Dashboard                                                           | 8     |
 | test_04_ticket_list.py           | Enquiries and Complaints lists                                      | 22    |
 | test_05_ticket_filter.py         | Filtering the lists                                                 | 11    |
-| test_06_ticket_detail.py         | Ticket detail screen                                                | 21    |
-| test_06a_investigation.py        | Investigation & Resolution tab                                      | 11    |
+| test_06_ticket_detail.py | Ticket detail screen | 20 |
+| test_06a_investigation.py | Investigation & Resolution tab | 10 |
 | test_06b_customer_records.py     | Customer records and customer history                               | 13    |
-| test_07_kanban.py                | Kanban board                                                        | 13    |
+| test_07_kanban.py | Kanban board | 12 |
 | test_07a_sla.py                  | SLA tab                                                             | 10    |
 | test_07b_escalation.py           | Manual escalation                                                   | 3     |
 | test_08_create_ticket.py         | Creating a ticket, CC Initiator picker                              | 22    |
-| test_08b_reply_lifecycle.py      | Ticket lifecycle through replies                                    | 10    |
+| test_08b_reply_lifecycle.py | Ticket lifecycle through replies | 9 |
 | test_08c_conditional_fields.py   | Fields that appear only in some cases                               | 9     |
 | test_09_form_validation.py       | Form error messages                                                 | 9     |
 | test_10_modal_form_validation.py | Pop-up form validation                                              | 5     |
@@ -248,10 +260,10 @@ Every test has labels (markers). Use `-m` to choose which ones run.
 | test_13_admin.py                 | Users, roles, Activity Log                                          | 12    |
 | test_13a_notification.py         | Notification bell                                                   | 11    |
 | test_14_reports_audit.py         | Reports and audit trail                                             | 18    |
-| test_15_role_access.py           | Who can open what                                                   | 9     |
-| test_15_role_matrix.py           | Every role against every screen and action                          | 98    |
+| test_15_role_access.py | Who can open what | 8 |
+| test_15_role_matrix.py | Every role against every screen and action | 84 |
 | test_16_department_isolation.py  | Dept POC sees only their own department                             | 8     |
-| test_17_role_scope.py            | Which tickets each role sees                                        | 8     |
+| test_17_role_scope.py | Which tickets each role sees | 6 |
 | test_18_fixed_bug_regression.py  | Bugs that were fixed                                                | 5     |
 | test_19_uat_regression.py        | UAT feedback items (U11, U12, U15, U16, U22)                        | 18    |
 | test_20_admin_config.py          | Teams & SLA, escalation ladder, historical archive, System Settings | 27    |
@@ -322,6 +334,5 @@ Helpful to know:
 | Issue                                                                                                               | Effect on the tests                               |
 | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | System Settings (`/admin/settings`) shows "Something went wrong" on UAT - the ticket-numbering API returns an error | 1 test is quarantined (`SETTINGS-500`)            |
-| No account has the Compliance Officer role                                                                          | Compliance Officer tests skip                     |
 | Right now no CC Initiator is paused, at the daily limit or deactivated, and the historical archive is empty         | Those picker and archive tests skip with a reason |
 | The complaint handler has no complaint assigned                                                                     | Its "own complaints" tests skip                   |

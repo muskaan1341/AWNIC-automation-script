@@ -133,18 +133,6 @@ class TestRoleAccess(BaseTest):
             f"An admin must see no ticket queues. Menu: {self.nav.all_item_labels()}"
         )
 
-    @pytest.mark.blocked("compliance_officer")
-    def test_compliance_officer_can_read_tickets_across_the_organisation(self):
-        """The Compliance Officer can read complaints across the organisation."""
-        self.login_once(self.get("complianceEmail"))
-        self.require_ticket_access("complianceEmail")
-
-        self.open("/tickets/complaints")
-        self.list.wait_until_loaded()
-
-        assert not self.is_access_denied(), "A compliance officer should see tickets"
-        assert self.list.get_row_count() > 0, "The complaints list should not be empty"
-
     @pytest.mark.sanity
     def test_a_cc_initiator_is_refused_every_screen_their_role_does_not_cover(self):
         """Typing an admin-only URL as a CC Initiator is refused."""

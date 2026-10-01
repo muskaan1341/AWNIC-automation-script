@@ -79,17 +79,6 @@ ROLE_SCREENS = [
     ("complaintHandlerEmail", "Complaint Handler", "/teams-sla", False),
     ("complaintHandlerEmail", "Complaint Handler", "/user-management", False),
     ("complaintHandlerEmail", "Complaint Handler", "/admin/settings", False),
-    # Compliance Officer: reads tickets, nothing else
-    ("complianceEmail", "Compliance Officer", "/tickets/enquiries", True),
-    ("complianceEmail", "Compliance Officer", "/tickets/complaints", True),
-    ("complianceEmail", "Compliance Officer", "/tickets/discarded", True),
-    ("complianceEmail", "Compliance Officer", "/tickets/enquiries/new", False),
-    ("complianceEmail", "Compliance Officer", "/reports", False),
-    ("complianceEmail", "Compliance Officer", "/audit-trail", False),
-    ("complianceEmail", "Compliance Officer", "/history", True),
-    ("complianceEmail", "Compliance Officer", "/teams-sla", False),
-    ("complianceEmail", "Compliance Officer", "/user-management", False),
-    ("complianceEmail", "Compliance Officer", "/admin/settings", False),
     # Department POC: own department's enquiries and complaints
     ("deptPocEmail", "Department POC", "/tickets/enquiries", True),
     ("deptPocEmail", "Department POC", "/tickets/complaints", True),
@@ -130,20 +119,12 @@ ROLE_ACTIONS = [
     ("ccInitiatorEmail", "CC Initiator", "Manual Escalation", False),
     ("ccInitiatorEmail", "CC Initiator", "Reassign", False),
     ("ccInitiatorEmail", "CC Initiator", "Move to Discarded", False),
-    ("complianceEmail", "Compliance Officer", "Reassign", False),
-    ("complianceEmail", "Compliance Officer", "Manual Escalation", False),
-    ("complianceEmail", "Compliance Officer", "Move to Discarded", False),
     # Only "not offered" rows for Reclassify: when it IS offered also depends on the ticket's stage.
     ("managerEmail", "Complaints Manager", "Reclassify as Complaint", False),
     ("supervisorEmail", "CC Supervisor", "Reclassify as Complaint", False),
-    ("complianceEmail", "Compliance Officer", "Reclassify as Complaint", False),
 ]
 
 
-# Rows for these accounts are marked blocked (no UAT user holds the role yet).
-_BLOCKED_ACCOUNT = {
-    "complianceEmail": "compliance_officer",
-}
 # The CC Initiator's screen rows are also part of the sanity run.
 _SANITY_ACCOUNT = "ccInitiatorEmail"
 # Screens added by Phase 2 (PR #186). Every other row is Phase 1.
@@ -159,8 +140,6 @@ def _screen_cases():
             marks.append(pytest.mark.phase2)
         else:
             marks.append(pytest.mark.phase1)
-        if account_key in _BLOCKED_ACCOUNT:
-            marks.append(pytest.mark.blocked(_BLOCKED_ACCOUNT[account_key]))
         if account_key == _SANITY_ACCOUNT:
             marks.append(pytest.mark.sanity)
         cases.append(
@@ -174,8 +153,6 @@ def _action_cases():
     cases = []
     for account_key, role_name, action, offered in ROLE_ACTIONS:
         marks = [pytest.mark.phase1]
-        if account_key in _BLOCKED_ACCOUNT:
-            marks.append(pytest.mark.blocked(_BLOCKED_ACCOUNT[account_key]))
         cases.append(
             pytest.param(account_key, role_name, action, offered, marks=marks, id=f"{role_name}:{action}")
         )

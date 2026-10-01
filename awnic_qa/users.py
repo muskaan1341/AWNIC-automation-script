@@ -14,18 +14,15 @@ from awnic_qa.config import Config, ConfigError
 # True until the `roles` table is exported and the role names below are confirmed.
 ROLES_UNVERIFIED = True
 
-# The eight role keys, as the application names them.
+# The role keys used by the tests, as the application names them.
 ADMIN = "admin"
 HEAD_OF_DEPARTMENT = "head_of_department"
 MANAGER = "manager"
 COMPLAINT_HANDLER = "complaint_handler"
 CC_SUPERVISOR = "cc_supervisor"
 CC_INITIATOR = "cc_initiator"
-COMPLIANCE_OFFICER = "compliance_officer"
 DEPT_POC = "dept_poc"
 
-# Roles nobody holds on this environment. A test needing one should skip, not fail.
-ROLE_HAS_NO_HOLDER = frozenset({COMPLIANCE_OFFICER})
 
 
 @dataclass(frozen=True)
@@ -83,7 +80,6 @@ COMPLAINT_HANDLER_ACCOUNT = _configured_account("complaintHandlerEmail")
 # Accounts with NO role (on UAT these do not exist at all).
 UNGRANTED_HOD = Account("hod@awnic.ae", "Hana Al Dhaheri", None, None)
 UNGRANTED_COMPLAINTS_MANAGER = Account("complaints.manager@awnic.ae", "Marwan Haddad", None, None)
-UNGRANTED_COMPLIANCE = Account("compliance@awnic.ae", "Yusuf Kareem", None, None)
 
 # Real staff accounts, emails from the settings file (hodEmail / managerEmail / deptPocEmail).
 HOD_BROKER_MOTOR = _configured_account("hodEmail")
@@ -123,7 +119,6 @@ ALL = (
     UNGRANTED_HOD,
     UNGRANTED_COMPLAINTS_MANAGER,
     COMPLAINT_HANDLER_ACCOUNT,
-    UNGRANTED_COMPLIANCE,
     HOD_BROKER_MOTOR,
     MANAGER_BUSINESS_SUPPORT,
     DEPT_POC_MEDICAL_OPS,

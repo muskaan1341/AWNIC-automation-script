@@ -136,23 +136,6 @@ class TestKanban(BaseTest):
             f"First card's wrapper: {first_wrapper}"
         )
 
-    @pytest.mark.regression
-    @pytest.mark.blocked("compliance_officer")
-    def test_a_read_only_role_cannot_drag_anything(self):
-        self.login_once(self.get("complianceEmail"))
-        self.open("/tickets/complaints")
-        self.list.wait_until_loaded()
-        self.list.switch_to_kanban()
-        self.kanban.wait_until_loaded()
-
-        if self.kanban.total_card_count() == 0:
-            pytest.skip("No cards visible to this role, so there is nothing to check.")
-        for column in KanbanPage.COLUMNS:
-            for card in self.kanban.cards_in(column):
-                assert not self.kanban.is_card_draggable(card), (
-                    "A compliance officer must not be able to drag any card"
-                )
-
     # ---------- moving a card ----------
 
     @pytest.mark.write

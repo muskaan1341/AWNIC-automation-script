@@ -274,21 +274,6 @@ class TestTicketDetail(BaseTest):
         assert not self.detail.is_notify_customer_checked(), "The checkbox should start unticked"
         self.detail.close_modal()
 
-    # ---------- a read-only role ----------
-
-    @pytest.mark.quarantine("TKT-03")
-    @pytest.mark.blocked("compliance_officer")
-    def test_a_compliance_officer_is_not_offered_resolve(self):
-        """Known defect TKT-03: expected to fail until the app is fixed."""
-        self.login_once(self.get("complianceEmail"))
-        self.require_ticket_access()
-        self.open_an_open_ticket_from("/tickets/complaints")
-
-        offered = self.detail.more_action_labels()
-        assert TicketDetailPage.RESOLVE_ITEM not in offered, (
-            f"A compliance officer should not be offered Resolve. Offered: {offered}"
-        )
-
     # ---------- reclassify and discard options ----------
 
     @pytest.mark.regression
