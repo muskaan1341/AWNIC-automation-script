@@ -66,6 +66,24 @@ def pytest_configure(config):
     Config.load(env=env, overrides=overrides)
 
 
+def pytest_collection_modifyitems(config, items):
+    """Skips every `blocked` test unless the run asks for them with -m "...blocked...".
+
+    Blocked tests cannot run safely or usefully here yet (for example a Kanban drag that
+    could move a real ticket on shared UAT). Skipping them by default makes the simple
+    command `pytest --env=deployed -m regression` safe.
+    """
+    if "blocked" in (config.getoption("markexpr") or ""):
+        return
+    for item in items:
+        marker = item.get_closest_marker("blocked")
+        if marker is not None:
+            reason = marker.args[0] if marker.args else "no reason given"
+            item.add_marker(pytest.mark.skip(
+                reason=f"Blocked ({reason}) - not run by default. Run it on purpose with -m blocked."
+            ))
+
+
 # ----------------------------------------------------------------------
 # The browser
 # ----------------------------------------------------------------------

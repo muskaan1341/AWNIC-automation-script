@@ -53,7 +53,7 @@ Always run from the repository folder, with the environment activated.
 | -------------------------------------- | --------------------------------------------------------- | ----------------------------------------------- |
 | Quick check that the app works       | `pytest --env=deployed -m smoke`                        | `pytest -m smoke`                             |
 | Check every main area once           | `pytest --env=deployed -m sanity`                       | `pytest -m sanity`                            |
-| Run the full regression              | `pytest --env=deployed -m "regression and not blocked"` | `pytest -m "regression and not blocked"`      |
+| Run the full regression              | `pytest --env=deployed -m regression` | `pytest -m regression`      |
 | Run one file                         | `pytest --env=deployed tests/test_07_kanban.py`         | `pytest tests/test_07_kanban.py`              |
 | Run tests whose name contains a word | `pytest --env=deployed -k "kanban"`                     | `pytest -k "kanban"`                          |
 | Run without a Chrome window          | add `-D headless=true`                                   | add `-D headless=true`                         |
@@ -210,8 +210,7 @@ Every test has labels (markers). Use `-m` to choose which ones run.
 | --- | --- | --- |
 | `smoke` | "is the app working?" - quick check | 25 |
 | `sanity` | each main area once (includes smoke) | 67 |
-| `regression` | the full suite (includes the 9 blocked tests) | 368 |
-| `regression and not blocked` | the full suite **minus the 9 blocked tests** - use this one | 359 |
+| `regression` | the full suite (the 9 blocked tests inside it are skipped automatically) | 368 |
 | `phase1` / `phase2` | which project phase the feature belongs to | 337 / 54 |
 | `p0` / `p1` / `p2` | priority (p0 = most important) | |
 | `blocked` | can't run safely on UAT yet - see below | 9 |
@@ -220,18 +219,18 @@ Every test has labels (markers). Use `-m` to choose which ones run.
 
 **Total: 391 tests.** The full list of markers is in `pytest.ini`.
 
-### Why `"regression and not blocked"` and not just `regression`?
+### What happens to blocked tests?
 
-`regression` also picks up the 9 **blocked** tests. They can't give a useful result on the
-shared UAT site, and some are not safe there:
+`-m regression` includes 9 **blocked** tests. They are **skipped automatically** (the run shows
+the reason), because on the shared UAT site they are not safe or cannot give a useful result:
 
-| Blocked reason | Tests | Why it is left out |
+| Blocked reason | Tests | Why it is skipped |
 | --- | --- | --- |
 | `shared_uat_no_drag` | 3 | They really drag a Kanban card. On shared UAT a drop that lands one column off would move a real ticket. |
-| `tier1_window` | 4 | They need a ticket that is still inside its first-level (Tier 1) window; UAT rarely has one, so they fail for a data reason. |
+| `tier1_window` | 4 | They need a ticket that is still inside its first-level (Tier 1) window; UAT rarely has one. |
 | `roleless_account` | 2 | They need accounts with no role, which don't exist on UAT. |
 
-So `-m "regression and not blocked"` = everything that is safe and able to run.
+To run them on purpose (for example on a private test environment): `pytest -m blocked`.
 
 ---
 

@@ -64,13 +64,17 @@ class TestKanban(BaseTest):
     def test_an_empty_column_explains_itself_instead_of_looking_broken(self):
         self.open_board()
 
-        for column in KanbanPage.COLUMNS:
-            if self.kanban.card_count(column) == 0:
+        # UAT usually has cards in every column, so search for a ticket that does not exist.
+        # The board applies the search too, which leaves every column empty.
+        self.list.search("zzz-no-such-ticket-zzz")
+        try:
+            self.wait.until(lambda driver: self.kanban.total_card_count() == 0)
+            for column in KanbanPage.COLUMNS:
                 assert self.kanban.shows_drop_hint(column), (
                     f"The empty '{column}' column should say 'Drop tickets here'"
                 )
-                return
-        pytest.skip("Every column has cards, so there is no empty one to check.")
+        finally:
+            self.list.clear_search()
 
     @pytest.mark.regression
     def test_the_board_and_the_list_tell_the_same_story(self):
