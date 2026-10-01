@@ -1,24 +1,12 @@
 """
-MODULE 04 - Creating a ticket by hand (a walk-in or a phone call).
+Manual ticket creation tests (walk-in or phone call).
 
-Most of these tests check VALIDATION, and they all do it the same way: by looking at whether
-the "Create ticket" button is enabled. That is a very stable thing to assert - there is no
-error text to match, so the test cannot pass by accident on the wrong message, and it cannot
-break when the wording is polished.
+Most tests check whether the "Create ticket" button is enabled.
+No test presses it, so nothing is written to the database.
 
-WHAT THE FORM ACTUALLY REQUIRES: Source, Department and Priority. Plus a reason when the
-source is Walk-in, and a category when it is a complaint. Subject and Description are optional
-- which surprises people, so it is asserted below rather than assumed.
-
-NOTHING HERE WRITES TO THE DATABASE. Every test stops before "Create ticket" is pressed. The
-one test that did submit a real enquiry was removed on 2026-09-09 with the other data-writing
-tests, so this class is safe against a shared environment.
+TestCcInitiatorPicker (Phase 2) reads the Assignment card's Channel -> CC Initiator picker
+against the Teams & SLA > CC Initiator Pools roster. It only opens the dropdowns.
 """
-
-from __future__ import annotations
-
-import re
-import time
 
 import pytest
 
@@ -26,23 +14,22 @@ from awnic_qa import customers
 from awnic_qa.base_test import BaseTest
 from awnic_qa.pages.new_ticket_page import NewTicketPage
 
-#: Priority from QA/qa-priority-test-matrix.md:
-#:   B-P0 'Manual ticket creation — creates a real, correctly-numbered ticket'
-pytestmark = [pytest.mark.p0, pytest.mark.phase1, pytest.mark.regression]
+pytestmark = [pytest.mark.regression]
 
 
-
+@pytest.mark.p0
+@pytest.mark.phase1
 class TestCreateTicket(BaseTest):
     @pytest.fixture(scope="class", autouse=True)
     def sign_in(self, request, browser):
         request.cls.login_class(request.cls.get("agentEmail"))
 
-    def open_enquiry_form(self) -> None:
-        """Opens the create screen and steps past the customer search onto the form itself."""
+    def open_enquiry_form(self):
+        """Opens the create screen and skips the customer search."""
         self.open("/tickets/enquiries/new")
         self.new_ticket.continue_to_form()
 
-    def open_complaint_form(self) -> None:
+    def open_complaint_form(self):
         self.open("/tickets/complaints/new")
         self.new_ticket.continue_to_form()
 
@@ -102,7 +89,7 @@ class TestCreateTicket(BaseTest):
         )
 
     def test_subject_and_description_are_not_required(self):
-        """Subject and Description are optional - worth pinning down so nobody "fixes" it."""
+        """Subject and Description are optional."""
         self.open_enquiry_form()
         self.new_ticket.fill_minimum_enquiry()
 
@@ -176,12 +163,9 @@ class TestCreateTicket(BaseTest):
             "A complaint must be categorised before it can be saved"
         )
 
-        # The category list is a cascade - it only fills up once a Product Line is chosen.
+        # Complaint Category only has values once a Product Line is chosen.
         if not self.new_ticket.get_dropdown_options("Product Line"):
-            pytest.skip(
-                "No Product Line values are configured on this environment, so the complaint "
-                "cascade cannot be exercised. Seed the complaint taxonomy first."
-            )
+            pytest.skip("No Product Line values on this environment - seed the complaint taxonomy.")
         self.new_ticket.select_first_option("Product Line")
         self.new_ticket.select_first_option("Complaint Category")
         assert self.new_ticket.is_create_ticket_enabled(), (
@@ -189,11 +173,7 @@ class TestCreateTicket(BaseTest):
         )
 
     def test_with_no_customer_chosen_the_alternate_contacts_become_compulsory(self):
-        """
-        When no customer was picked, the two alternate contact fields are the ONLY way to reach
-        the person back - so the form makes them compulsory and drops the "(Optional)" from
-        their labels. Worth pinning down, because it is easy to "simplify" away.
-        """
+        """Without a customer, Alternate Email and Alternate Mobile are both required."""
         self.open_enquiry_form()
 
         self.new_ticket.select_option("Source", "Phone")
@@ -285,8 +265,7 @@ class TestCreateTicket(BaseTest):
     def test_cancel_goes_back_to_the_list_without_creating_anything(self):
         self.open("/tickets/enquiries")
         self.list.wait_until_loaded()
-        # The REPORTED total: the list shows ten a page, so with more than ten enquiries a new
-        # ticket would not change the row count on screen at all.
+        # Use the reported total - the list only shows ten rows per page.
         before = self.list.get_reported_result_count()
 
         self.open_enquiry_form()
@@ -302,4 +281,138 @@ class TestCreateTicket(BaseTest):
             f"{self.list.get_reported_result_count()} after"
         )
 
-    # ---------- the happy path ----------
+
+@pytest.mark.p1
+@pytest.mark.phase2
+class TestCcInitiatorPicker(BaseTest):
+    """
+    Who the manual-create picker offers for each channel (CcInitiatorPicker.tsx):
+    paused and deactivated initiators are left out, and someone at today's limit is
+    listed but cannot be picked. UAT data is shared, so the roster is only READ - nobody
+    is paused, capped or deactivated by these tests, and the form is never submitted.
+    """
+
+    # The roster's Status words (lib/ccInitiatorStatus.ts).
+    AVAILABLE = "Available"
+    AT_LIMIT = "At limit"
+    PAUSED = "Paused"
+    ACCOUNT_OFF = "Account off"
+
+    @pytest.fixture(scope="class", autouse=True)
+    def sign_in(self, request, browser):
+        # A Manager can both read the Teams & SLA roster and open the create form.
+        request.cls.login_class(request.cls.get("managerEmail"))
+
+    def read_roster(self):
+        """{pool label: [(name, status), ...]} from Teams & SLA > CC Initiator Pools."""
+        self.login_once(self.get("managerEmail"))
+        self.open_and_wait("/teams-sla")
+        self.wait_for_page_content()
+        self.reports.open_teams_sla_tab("CC Initiator Pools")
+        roster = {}
+        for pool in self.reports.pool_labels():
+            roster[pool] = self.reports.pool_roster(pool)
+        return roster
+
+    def open_form_channels(self):
+        """Opens the enquiry form and returns its Channel options (once the pools have loaded)."""
+        self.open("/tickets/enquiries/new")
+        self.new_ticket.continue_to_form()
+        channels = self.new_ticket.channel_options_when_loaded()
+        if not channels:
+            pytest.skip("The Channel dropdown never listed a CC Initiator pool on this environment.")
+        return channels
+
+    def offered_for(self, channel):
+        """[(label, can be picked), ...] the CC Initiator dropdown offers for this channel."""
+        self.new_ticket.choose_channel(channel)
+        return self.new_ticket.cc_initiator_options()
+
+    def find_member(self, wanted_status):
+        """
+        Reads the roster, opens the form, and returns (channel, name) of the first initiator
+        with this status in a pool the form offers as a channel - or (None, None).
+        """
+        roster = self.read_roster()
+        channels = self.open_form_channels()
+        for pool, members in roster.items():
+            if pool not in channels:
+                continue  # e.g. "CCC Complaint Handler" is not a picker channel
+            for name, status in members:
+                if status == wanted_status:
+                    return pool, name
+        return None, None
+
+    def skip_because_nobody_is(self, status):
+        pytest.skip(
+            f"No CC Initiator has the status '{status}' in any channel pool on Teams & SLA > "
+            "CC Initiator Pools right now. Changing someone's status would change shared UAT "
+            "data, so this case cannot be checked here."
+        )
+
+    def test_r40_each_channel_offers_exactly_its_in_rotation_initiators(self):
+        """Each channel lists its Available and At-limit members, and only the At-limit ones are disabled."""
+        roster = self.read_roster()
+        channels = self.open_form_channels()
+        checked = 0
+        for pool, members in roster.items():
+            if pool not in channels:
+                continue
+            expected = []
+            expected_disabled = []
+            for name, status in members:
+                if status in (self.AVAILABLE, self.AT_LIMIT):
+                    expected.append(name)
+                if status == self.AT_LIMIT:
+                    expected_disabled.append(name)
+            offered = []
+            disabled = []
+            for label, enabled in self.offered_for(pool):
+                offered.append(NewTicketPage.initiator_name(label))
+                if not enabled:
+                    disabled.append(NewTicketPage.initiator_name(label))
+            assert sorted(offered) == sorted(expected), (
+                f"Channel '{pool}' should offer {sorted(expected)}, offers {sorted(offered)}"
+            )
+            assert sorted(disabled) == sorted(expected_disabled), (
+                f"Channel '{pool}': only at-limit people should be disabled. "
+                f"Expected {sorted(expected_disabled)}, disabled {sorted(disabled)}"
+            )
+            checked += 1
+        assert checked, f"No roster pool matched a Channel option. Pools: {list(roster)}"
+
+    def test_r40_a_paused_initiator_is_not_offered(self):
+        """A pool member switched off (Paused) is not in that channel's list."""
+        channel, name = self.find_member(self.PAUSED)
+        if channel is None:
+            self.skip_because_nobody_is(self.PAUSED)
+        offered = []
+        for label, enabled in self.offered_for(channel):
+            offered.append(NewTicketPage.initiator_name(label))
+        assert name not in offered, f"Paused '{name}' must not be offered under '{channel}': {offered}"
+
+    def test_r40_an_initiator_at_the_daily_limit_is_listed_but_disabled(self):
+        """Someone at today's limit is shown greyed out, with an "at daily limit" note."""
+        channel, name = self.find_member(self.AT_LIMIT)
+        if channel is None:
+            self.skip_because_nobody_is(self.AT_LIMIT)
+        matches = []
+        for label, enabled in self.offered_for(channel):
+            if NewTicketPage.initiator_name(label) == name:
+                matches.append((label, enabled))
+        assert matches, f"'{name}' is at the limit but should still be listed under '{channel}'"
+        label, enabled = matches[0]
+        assert not enabled, f"'{name}' is at the daily limit and must not be selectable"
+        assert NewTicketPage.AT_LIMIT_SUFFIX in label, f"The option should say why: '{label}'"
+
+    def test_r40_a_deactivated_initiator_is_not_offered(self):
+        """A pool member whose account is deactivated (Account off) is not in that channel's list."""
+        channel, name = self.find_member(self.ACCOUNT_OFF)
+        if channel is None:
+            self.skip_because_nobody_is(self.ACCOUNT_OFF)
+        offered = []
+        for label, enabled in self.offered_for(channel):
+            offered.append(NewTicketPage.initiator_name(label))
+        assert name not in offered, (
+            f"Deactivated '{name}' must not be offered under '{channel}': {offered}"
+        )

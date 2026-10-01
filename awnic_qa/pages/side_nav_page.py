@@ -1,26 +1,17 @@
 """
-The left-hand menu (the <aside> element), present on every signed-in page.
+The left-hand menu (the <aside> element) on every signed-in page.
+Which items appear depends on the signed-in user's role.
 
-What appears here depends entirely on the signed-in user's role, so this page object is
-mostly used to check that a role is offered only what its job needs.
-
-THE MENU HAS THREE SHAPES, not one:
-  - a role that can configure things (Head of Department, Complaints Manager) gets a
-    collapsible "Tickets" GROUP holding Enquiries / Complaints / Discarded Tickets,
-  - a role that sees several ticket types but configures nothing (CC Agent, Supervisor)
-    gets FLAT entries labelled "Enquiries Tickets" / "Complaint Tickets" / "Discarded
-    Tickets",
-  - a role that sees exactly one type (Complaint Handler) gets a single "Tickets" link.
-
-And nothing is greyed out any more. "Teams & SLA" used to be the one disabled entry and
-is now a working page, so the expected count of disabled items is ZERO.
+The menu has three shapes:
+  - Head of Department / Complaints Manager: a collapsible "Tickets" group
+  - CC Agent / Supervisor: flat items "Enquiries Tickets", "Complaint Tickets", "Discarded Tickets"
+  - Complaint Handler: a single "Tickets" link
+No item is greyed out any more, so the expected number of disabled items is zero.
 """
-
-from __future__ import annotations
 
 from selenium.webdriver.common.by import By
 
-from awnic_qa.pages.base_page import BasePage, Locator
+from awnic_qa.pages.base_page import BasePage
 
 
 class SideNavPage(BasePage):
@@ -33,22 +24,15 @@ class SideNavPage(BasePage):
     )
 
     @staticmethod
-    def nav_item(label: str) -> Locator:
-        """
-        A menu entry whose visible text is exactly this label.
-        Some entries are links wrapping a <span>, others are plain links, so this matches on
-        TEXT rather than on the tag name.
-        """
+    def nav_item(label):
+        """A menu item whose visible text is exactly this label."""
         return (By.XPATH, f"//aside//*[normalize-space(text())='{label}']")
 
     # ---------- ACTIONS ----------
 
-    def wait_until_loaded(self) -> None:
+    def wait_until_loaded(self):
         self.wait_visible(self.SIDE_NAV)
-        # The menu's SHAPE comes from the signed-in user's permissions, which the browser
-        # fetches after the first paint. Until they arrive the menu renders its
-        # permission-less shape, so reading it too early reports the wrong one. Wait until
-        # some ticket entry exists - by then the permissions have landed.
+        # The menu changes shape once the user's permissions load, so wait for a ticket item.
         self.wait.until(
             lambda d: self.has_tickets_group()
             or self.has_item("Tickets")
@@ -57,54 +41,50 @@ class SideNavPage(BasePage):
             or self.has_no_ticket_queues()
         )
 
-    def click_item(self, label: str) -> None:
+    def click_item(self, label):
         self.click(self.nav_item(label))
 
-    def toggle_tickets_group(self) -> None:
-        # Scroll first: on a short window the group header can sit below the fold, and a
-        # click on an off-screen element is refused rather than scrolled to.
+    def toggle_tickets_group(self):
+        # Scroll first - on a short window the group can be below the fold.
         self.scroll_to_middle(self.wait_visible(self.TICKETS_GROUP_TOGGLE))
         self.click(self.TICKETS_GROUP_TOGGLE)
 
     # ---------- CHECKS ----------
 
-    def has_item(self, label: str) -> bool:
-        """True if this role is offered the menu entry at all."""
+    def has_item(self, label):
         return self.exists(self.nav_item(label))
 
-    def has_tickets_group(self) -> bool:
-        """The collapsible "Tickets" group, shown only to the configuration tier."""
+    def has_tickets_group(self):
+        """True when the collapsible "Tickets" group is shown."""
         return self.exists(self.TICKETS_GROUP_TOGGLE)
 
-    def is_tickets_group_expanded(self) -> bool:
+    def is_tickets_group_expanded(self):
         toggles = self.driver.find_elements(*self.TICKETS_GROUP_TOGGLE)
         return bool(toggles) and toggles[0].get_attribute("aria-expanded") == "true"
 
-    def disabled_item_count(self) -> int:
-        """
-        How many menu entries are greyed out.
-
-        Kept as a sweep rather than a check on one named item: the app used to grey out
-        "Teams & SLA" and no longer does, so the expected number is now zero. A sweep catches
-        a regression whatever the item happens to be called.
-        """
+    def disabled_item_count(self):
+        """How many menu items are greyed out (expected: zero)."""
         return self.count(self.DISABLED_ITEMS)
 
-    def disabled_item_labels(self) -> list[str]:
+    def disabled_item_labels(self):
         return self.texts_of(self.DISABLED_ITEMS)
 
-    def all_item_labels(self) -> list[str]:
-        """Every entry in the menu, top to bottom - handy for "what does this role see?"."""
-        return [text for text in self.texts_of(self.NAV_LINKS) if text]
+    def all_item_labels(self):
+        """Every item in the menu, top to bottom."""
+        labels = []
+        for text in self.texts_of(self.NAV_LINKS):
+            if text:
+                labels.append(text)
+        return labels
 
-    def dashboard_href(self) -> str:
-        """Where the Dashboard entry points: "/admin" for a pure administrator, "/" otherwise."""
+    def dashboard_href(self):
+        """Where the Dashboard item points: "/admin" for a pure administrator, "/" otherwise."""
         return self.driver.find_element(
             By.XPATH, "//aside//a[.//span[normalize-space()='Dashboard']]"
         ).get_attribute("href")
 
-    def has_no_ticket_queues(self) -> bool:
-        """True when the menu offers no ticket queue of any kind."""
+    def has_no_ticket_queues(self):
+        """True when the menu has no ticket item of any kind."""
         return not (
             self.has_item("Enquiries Tickets")
             or self.has_item("Complaint Tickets")

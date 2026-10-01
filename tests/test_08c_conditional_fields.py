@@ -1,27 +1,9 @@
 """
-R24 / R32 - CONDITIONAL FIELDS AND THE TWO-PHASE CREATE FLOW (Phase 2).
+Conditional field tests on the create and edit forms.
 
-Three fields appear only when they apply, on the create form (NewTicketForm.tsx) and on the edit
-form (TicketEditForm.tsx, driven by the `visibleWhen` rules in lib/ticketEdit.ts):
-
-  Reason for Walk-in   Source = "Walk-in"                       (create form only)
-  Garage Name          Complaint Sub-Type is a garage one        GARAGE_SUB_TYPES
-  Vehicle Plate        Department = "Motor Claims"               MOTOR_DEPARTMENT
-
-and a field that disappears must not keep a stale value that would be submitted later - both
-forms blank it (NewTicketForm's department/sub-type onChange, ticketEdit.ts clearHiddenFields).
-
-ALREADY COVERED ELSEWHERE, NOT REPEATED: test_08_create_ticket.py proves Walk-in reveals the
-reason on the enquiry form, Phone does not ask for it, and a walk-in needs its reason before it
-can be submitted. This file adds only what those do not: the reason disappearing again, the
-complaint-form Walk-in rule, Garage Name, Vehicle Plate, the edit-form rules, and the clearing.
-
-NOTHING IS SAVED. Create-form tests never press "Create ticket"; edit-form tests leave through
-the form's Cancel link. The complaint taxonomy path down to a garage sub-type is DISCOVERED from
-the dropdowns, not hard-coded.
+Reason for Walk-in shows only for Source = Walk-in, Vehicle Plate only for Motor Claims,
+Garage Name only for a garage sub-type. A hidden field must also be cleared. Nothing is saved.
 """
-
-from __future__ import annotations
 
 import pytest
 
@@ -40,72 +22,52 @@ class TestConditionalFields(BaseTest):
     def sign_in(self, request, browser):
         request.cls.login_class(request.cls.get("agentEmail"))
 
-    def open_form(self, kind: str) -> None:
+    def open_form(self, kind):
         self.login_once(self.get("agentEmail"))
         self.open(f"/tickets/{kind}/new")
         self.new_ticket.continue_to_form()
 
-    def reach_garage_sub_type(self) -> str:
+    def reach_garage_sub_type(self):
         sub_type = self.new_ticket.choose_garage_sub_type_path()
         if not sub_type:
-            pytest.skip(
-                "No Motor Claims path in this environment's complaint taxonomy leads to a "
-                f"garage sub-type ({NewTicketPage.GARAGE_SUB_TYPES})."
-            )
+            pytest.skip(f"No complaint path leads to a garage sub-type ({NewTicketPage.GARAGE_SUB_TYPES}).")
         return sub_type
 
-    # ==================================================================
-    # R32 - the two-phase flow and the section order
-    # ==================================================================
+    # ---------- the two-step create flow and section order ----------
 
     @pytest.mark.p1
     @pytest.mark.parametrize("kind", ["enquiries", "complaints"])
     def test_r32_customer_search_comes_first_then_the_form_in_its_five_sections(self, kind):
-        """
-        R32. NewTicketFlow.tsx is two-phase: step 1 is the "New Ticket" page with the customer
-        search (and a "Create ticket" skip), and only then the form. The form's cards run, top
-        to bottom: Customer Details, Ticket Information, Priority & Severity, Assignment,
-        Internal Notes (NewTicketForm.tsx Card titles).
-        """
+        """The customer search comes first, then the form with its five sections in order."""
         self.login_once(self.get("agentEmail"))
         self.open(f"/tickets/{kind}/new")
         self.wait.until(lambda d: self.new_ticket.is_customer_search_displayed())
 
         assert self.new_ticket.is_on_customer_search_step(), (
-            "Step 1 should be the customer search alone - the form must not be shown yet"
+            "Step 1 should show only the customer search, not the form"
         )
         self.new_ticket.continue_to_form()
         assert self.new_ticket.section_titles() == NewTicketPage.SECTION_TITLES, (
-            f"The {kind} form's sections should read {NewTicketPage.SECTION_TITLES}, "
+            f"Expected sections {NewTicketPage.SECTION_TITLES}, "
             f"got {self.new_ticket.section_titles()}"
         )
 
-    # ==================================================================
-    # R24 - the create form
-    # ==================================================================
+    # ---------- the create form ----------
 
     @pytest.mark.p1
     @pytest.mark.parametrize("kind", ["enquiries", "complaints"])
     def test_r24_the_walk_in_reason_disappears_when_the_source_changes_away(self, kind):
-        """
-        R24. `{form.source === "Walk-in" && <Field label="Reason for Walk-in">}` - shown for
-        Walk-in only, on both ticket types, and hidden again the moment Source moves on.
-        """
         self.open_form(kind)
         self.new_ticket.select_option("Source", NewTicketPage.WALK_IN)
         assert self.new_ticket.is_field_displayed(REASON), f"Walk-in should ask why ({kind})"
 
         self.new_ticket.select_option("Source", "Phone")
         assert not self.new_ticket.is_field_displayed(REASON), (
-            f"Changing Source away from Walk-in should hide the reason again ({kind})"
+            f"Changing Source away from Walk-in should hide the reason ({kind})"
         )
 
     @pytest.mark.p1
     def test_r24_vehicle_plate_is_asked_only_for_motor_claims_and_cleared_when_left(self):
-        """
-        R24. Vehicle Plate renders only while Department is "Motor Claims"; changing the
-        department resets vehicle_plate to "" in the same setForm, so going back finds it empty.
-        """
         self.open_form("complaints")
         assert not self.new_ticket.is_field_displayed(PLATE), (
             "No department chosen yet, so no Vehicle Plate"
@@ -113,6 +75,7 @@ class TestConditionalFields(BaseTest):
         departments = self.new_ticket.get_loaded_dropdown_options("Department")
         if NewTicketPage.MOTOR_DEPARTMENT not in departments:
             pytest.skip("Motor Claims is not a complaint department on this environment.")
+        # Any department other than Motor Claims.
         other = next(d for d in departments if d != NewTicketPage.MOTOR_DEPARTMENT)
 
         self.new_ticket.select_option("Department", other)
@@ -129,42 +92,34 @@ class TestConditionalFields(BaseTest):
         )
         self.new_ticket.select_option("Department", NewTicketPage.MOTOR_DEPARTMENT)
         assert self.new_ticket.get_field_value(PLATE) == "", (
-            "A plate typed before the department changed must not come back - it was cleared"
+            "The plate should have been cleared when the department changed"
         )
 
     @pytest.mark.p1
     def test_r24_garage_name_appears_only_for_a_garage_sub_type(self):
-        """
-        R24. `garageApplies = GARAGE_SUB_TYPES.includes(form.complaint_sub_type)` - Garage Name
-        appears for "Garage Repair Delay" / "Garage Repair Quality Issues" only, and disappears
-        when the sub-type moves to anything else.
-        """
         self.open_form("complaints")
         assert not self.new_ticket.is_field_displayed(GARAGE), "No sub-type yet, so no Garage"
 
         sub_type = self.reach_garage_sub_type()
         assert self.new_ticket.is_field_displayed(GARAGE), (
-            f"Sub-type '{sub_type}' is a garage repair one, so Garage Name should appear"
+            f"Sub-type '{sub_type}' should show Garage Name"
         )
         other = self.new_ticket.first_non_garage_sub_type()
         if not other:
             pytest.skip("Every sub-type under this path is a garage one; cannot switch away.")
         self.new_ticket.select_option("Complaint Sub-Type", other)
         assert not self.new_ticket.is_field_displayed(GARAGE), (
-            f"'{other}' is not a garage sub-type, so Garage Name should be hidden again"
+            f"'{other}' is not a garage sub-type, so Garage Name should be hidden"
         )
 
     @pytest.mark.p2
     def test_r24_a_garage_chosen_then_hidden_is_cleared(self):
-        """
-        R24. Switching the sub-type away sets garage_name to "" (NewTicketForm complaint_sub_type
-        onChange), so a hidden garage can never ride along into the saved ticket.
-        """
+        """A garage chosen, then hidden by changing the sub-type, is cleared."""
         self.open_form("complaints")
         self.reach_garage_sub_type()
         garages = self.new_ticket.get_dropdown_options(GARAGE)
         if not garages:
-            pytest.skip("No garages are configured on this environment (getGarages is empty).")
+            pytest.skip("No garages are configured on this environment.")
         self.new_ticket.select_option(GARAGE, garages[0])
         garage_sub_type = self.new_ticket.selected_value("Complaint Sub-Type")
         other = self.new_ticket.first_non_garage_sub_type()
@@ -175,74 +130,60 @@ class TestConditionalFields(BaseTest):
         self.new_ticket.select_option("Complaint Sub-Type", garage_sub_type)
         shown = self.new_ticket.selected_value(GARAGE)
         assert shown in ("", "Select the garage"), (
-            f"The garage '{garages[0]}' was hidden and must have been cleared; it shows '{shown}'"
+            f"The garage '{garages[0]}' should have been cleared; it shows '{shown}'"
         )
 
-    # ==================================================================
-    # R24 - the edit form (visibleWhen in lib/ticketEdit.ts)
-    # ==================================================================
+    # ---------- the edit form ----------
 
-    def open_complaint_edit_form(self) -> None:
-        """
-        An open complaint's edit form, as the CC SUPERVISOR - never its assigned initiator,
-        whose opening a New ticket would auto-advance it (a write). Skips when Edit is not
-        offered (missing required fields / action lock - both correct).
-        """
+    def open_complaint_edit_form(self):
+        """Opens the edit form of an open complaint, or skips if Edit is not offered."""
+        # Supervisor, not the initiator: an initiator opening a New ticket would change its stage.
         self.login_once(self.get("supervisorEmail"))
         self.require_ticket_access()
         self.open_an_open_ticket_from("/tickets/complaints")
         offered = self.detail.more_action_labels()
         if "Edit" not in offered:
-            pytest.skip(
-                f"Edit is not offered on {self.detail.get_reference_number()} ({offered}); it "
-                "is hidden while required fields are missing, which is correct."
-            )
+            pytest.skip(f"Edit is not offered on {self.detail.get_reference_number()} ({offered}).")
         self.detail.open_more_action_menu()
         self.detail.click_menu_item("Edit")
         self.wait_for_url_containing("/edit")
         self.edit_ticket.wait_until_loaded()
 
-    def leave_edit_form_unsaved(self) -> None:
+    def leave_edit_form_unsaved(self):
         self.edit_ticket.cancel()
         self.wait_for_ticket_detail_url()
 
     @pytest.mark.p1
     def test_r24_edit_form_shows_vehicle_plate_only_for_motor_claims(self):
-        """
-        R24 on the EDIT form: `vehicle_plate` visibleWhen department === "Motor Claims", and
-        clearHiddenFields blanks it once hidden. Values are changed on screen only - the form is
-        left through Cancel, nothing is saved.
-        """
+        """On the edit form, Vehicle Plate shows only for Motor Claims and is cleared when hidden."""
         self.open_complaint_edit_form()
         departments = self.edit_ticket.options_of("department")
         if NewTicketPage.MOTOR_DEPARTMENT not in departments:
             pytest.skip("Motor Claims is not offered on the complaint edit form here.")
+        # Any department other than Motor Claims.
         other = next(d for d in departments if d != NewTicketPage.MOTOR_DEPARTMENT)
         try:
             self.edit_ticket.choose("department", other)
             assert not self.edit_ticket.is_field_present("vehicle_plate"), (
-                f"Department '{other}' must not show Vehicle Plate on the edit form"
+                f"Department '{other}' must not show Vehicle Plate"
             )
             self.edit_ticket.choose("department", NewTicketPage.MOTOR_DEPARTMENT)
             assert self.edit_ticket.is_field_present("vehicle_plate"), (
-                "Motor Claims should show Vehicle Plate on the edit form"
+                "Motor Claims should show Vehicle Plate"
             )
             self.edit_ticket.fill("vehicle_plate", "QA 12345")
             self.edit_ticket.choose("department", other)
             assert not self.edit_ticket.is_field_present("vehicle_plate")
             self.edit_ticket.choose("department", NewTicketPage.MOTOR_DEPARTMENT)
             assert self.edit_ticket.value_of("vehicle_plate") == "", (
-                "clearHiddenFields should have blanked the plate while it was hidden"
+                "The plate should have been cleared while it was hidden"
             )
         finally:
             self.leave_edit_form_unsaved()
 
     @pytest.mark.p1
     def test_r24_edit_form_shows_garage_name_only_for_a_garage_sub_type(self):
-        """
-        R24 on the EDIT form: `garage_name` visibleWhen GARAGE_SUB_TYPES includes the complaint
-        sub-type; switching away hides AND blanks it (clearHiddenFields). Left through Cancel.
-        """
+        """On the edit form, Garage Name shows only for a garage sub-type and is cleared when hidden."""
         self.open_complaint_edit_form()
         try:
             sub_type = self.edit_ticket.choose_garage_sub_type_path(
@@ -251,17 +192,16 @@ class TestConditionalFields(BaseTest):
             if not sub_type:
                 pytest.skip("No taxonomy path to a garage sub-type on the edit form here.")
             assert self.edit_ticket.is_field_present("garage_name"), (
-                f"Sub-type '{sub_type}' should show Garage Name on the edit form"
+                f"Sub-type '{sub_type}' should show Garage Name"
             )
             self.edit_ticket.fill("garage_name", "QA Garage")
-            other = next(
-                (
-                    o
-                    for o in self.edit_ticket.options_of("complaint_sub_type")
-                    if o not in NewTicketPage.GARAGE_SUB_TYPES
-                ),
-                "",
-            )
+
+            # Find the first sub-type that is not a garage one.
+            other = ""
+            for option in self.edit_ticket.options_of("complaint_sub_type"):
+                if option not in NewTicketPage.GARAGE_SUB_TYPES:
+                    other = option
+                    break
             if not other:
                 pytest.skip("Every sub-type under this path is a garage one; cannot switch away.")
             self.edit_ticket.choose("complaint_sub_type", other)
@@ -270,7 +210,7 @@ class TestConditionalFields(BaseTest):
             )
             self.edit_ticket.choose("complaint_sub_type", sub_type)
             assert self.edit_ticket.value_of("garage_name") == "", (
-                "clearHiddenFields should have blanked the garage while it was hidden"
+                "The garage should have been cleared while it was hidden"
             )
         finally:
             self.leave_edit_form_unsaved()

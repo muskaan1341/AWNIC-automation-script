@@ -1,27 +1,11 @@
 """
 Reads the settings file.
 
-WHICH FILE? That depends on where you are pointing the tests:
-    pytest                    -> config/config.properties           (your own laptop)
-    pytest --env=deployed     -> config/config.deployed.properties  (the AWS test site)
+    pytest                  -> config/config.properties           (your laptop)
+    pytest --env=deployed   -> config/config.deployed.properties  (the AWS test site)
 
-WHY IS THIS ITS OWN MODULE? So that "where do settings come from" is one small file you
-can read in a minute, instead of being mixed into the browser setup. Tests get values
-through BaseTest.get("..."), which just calls Config.get("...").
-
-ORDER OF PRECEDENCE, highest first:
-  1. a -D key=value on the pytest command line
-  2. the value in whichever settings file was chosen above
-That is why "pytest -D headless=true" works without editing any file.
-
-The settings files are the SAME .properties files the Java suite used, copied across
-unchanged. They carry a lot of hard-won knowledge about the environments in their
-comments, and rewriting them into .ini would have thrown that away for no gain. The
-format is trivial - "key = value", "#" or "!" starts a comment - so it is parsed here
-in a dozen lines rather than pulling in a dependency.
+A "-D key=value" on the command line wins over the value in the file.
 """
-
-from __future__ import annotations
 
 from pathlib import Path
 
@@ -31,41 +15,34 @@ _TRUE_VALUES = {"true", "yes", "on", "1"}
 
 
 class ConfigError(RuntimeError):
-    """A setting was asked for that nothing can answer."""
+    """A setting was asked for that does not exist."""
 
 
 class Config:
-    """A holder for the loaded settings. Never instantiated."""
+    """Holds the loaded settings. Only class methods - never create one."""
 
-    #: Which settings file was loaded - printed once at the start of a run.
+    # Which settings file was loaded.
     file_name: str = ""
 
-    _values: dict[str, str] = {}
-    _overrides: dict[str, str] = {}
+    _values: dict = {}
+    _overrides: dict = {}
 
-    def __init__(self) -> None:  # pragma: no cover - defensive
+    def __init__(self):  # pragma: no cover - defensive
         raise TypeError("Config is a holder for class methods, not a thing to create.")
 
-    # ------------------------------------------------------------------
-    # Loading
-    # ------------------------------------------------------------------
-
     @classmethod
-    def load(cls, env: str | None = None, overrides: dict[str, str] | None = None) -> None:
+    def load(cls, env=None, overrides=None):
         """Called once by conftest.py before any test runs."""
-        cls.file_name = (
-            "config.deployed.properties" if env == "deployed" else "config.properties"
-        )
+        if env == "deployed":
+            cls.file_name = "config.deployed.properties"
+        else:
+            cls.file_name = "config.properties"
         cls._values = _read_properties(_CONFIG_DIR / cls.file_name)
         cls._overrides = dict(overrides or {})
 
-    # ------------------------------------------------------------------
-    # Reading
-    # ------------------------------------------------------------------
-
     @classmethod
-    def get(cls, key: str) -> str:
-        """A value from the settings file, e.g. get("agentEmail")."""
+    def get(cls, key):
+        """A value from the settings, e.g. get("agentEmail")."""
         if key in cls._overrides:
             return cls._overrides[key]
         if key in cls._values:
@@ -76,29 +53,29 @@ class Config:
         )
 
     @classmethod
-    def get_or(cls, key: str, fallback: str) -> str:
-        """The same, but for settings that are allowed to be absent."""
+    def get_or(cls, key, fallback):
+        """Same as get(), but returns fallback when the setting is missing."""
         try:
             return cls.get(key)
         except ConfigError:
             return fallback
 
     @classmethod
-    def get_bool(cls, key: str) -> bool:
+    def get_bool(cls, key):
         return cls.get(key).strip().lower() in _TRUE_VALUES
 
     @classmethod
-    def get_int(cls, key: str) -> int:
+    def get_int(cls, key):
         return int(cls.get(key).strip())
 
 
-def _read_properties(path: Path) -> dict[str, str]:
-    """Parses a Java .properties file: 'key = value', '#' or '!' comments, blanks ignored."""
+def _read_properties(path):
+    """Reads a .properties file: 'key = value' lines; '#' or '!' lines are comments."""
     if not path.exists():
         raise ConfigError(
             f"Settings file not found: {path}. The suite ships two of them in QA/selenium-py/config/."
         )
-    values: dict[str, str] = {}
+    values = {}
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or line.startswith("!"):

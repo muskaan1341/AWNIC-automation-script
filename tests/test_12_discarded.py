@@ -1,32 +1,16 @@
 """
-MODULE 07 (part 2) - The Discarded queue.
+Discarded queue tests.
 
-WHAT "DISCARDED" MEANS HERE: junk that arrived in the mailbox - marketing email, spam, a
-message meant for somebody else. It is moved out of the working queues so it stops polluting
-the SLA figures, but it is NEVER deleted. Everything about it is kept, and it can be brought
-back if the decision turns out to be wrong.
-
-TWO THINGS THAT SURPRISE PEOPLE:
-  1. A RESTORED ticket stays on this list forever, badged "Restored", so the record of the
-     mistake survives. It just loses its action menu, because restoring it again makes no
-     sense.
-  2. A restored row shows the number it was DISCARDED under, not the new number it now has -
-     so that a customer quoting the old number can still be traced.
-
-This screen is a DIFFERENT table from the enquiries list, with only five columns.
+Discarded tickets are junk (spam, wrong recipient). They are never deleted and can be
+restored. A restored ticket stays on this list with a "Restored" badge and no action menu.
 """
-
-from __future__ import annotations
 
 import pytest
 
 from awnic_qa.base_test import BaseTest
 from awnic_qa.pages.discarded_list_page import DiscardedListPage
 
-#: Priority from QA/qa-priority-test-matrix.md:
-#:   B-P1 'Discard a ticket — moves correctly, shows in the separate Discarded list'
 pytestmark = [pytest.mark.p1, pytest.mark.phase1]
-
 
 
 class TestDiscarded(BaseTest):
@@ -34,14 +18,8 @@ class TestDiscarded(BaseTest):
     def sign_in(self, request, browser):
         request.cls.login_class(request.cls.get("supervisorEmail"))
 
-    def open_discarded(self, role_key: str = "supervisorEmail") -> None:
-        # Names its own role on purpose: two tests in this class sign in as a complaint
-        # handler. pytest runs methods in DEFINITION order, so those two come last here - but
-        # login_once is free when the right person is already signed in, and it keeps this
-        # helper correct however the file is later reordered.
+    def open_discarded(self, role_key="supervisorEmail"):
         self.login_once(self.get(role_key))
-        # Say WHY when this account has no role, instead of waiting 20 seconds for a heading
-        # that is never coming. See BaseTest.require_ticket_access.
         self.require_ticket_access(role_key)
         self.open("/tickets/discarded")
         self.discarded.wait_until_loaded()
@@ -54,11 +32,9 @@ class TestDiscarded(BaseTest):
 
         headers = self.discarded.get_column_headers()
         for expected in DiscardedListPage.EXPECTED_COLUMNS:
-            assert expected in headers, (
-                f"Column '{expected}' is missing. Columns found: {headers}"
-            )
+            assert expected in headers, f"Column '{expected}' is missing. Columns: {headers}"
         assert "Current Handler" not in headers, (
-            "Discarded junk has no handler, so that column belongs to the other list"
+            "The discarded list should not have a Current Handler column"
         )
 
     @pytest.mark.regression
@@ -67,8 +43,7 @@ class TestDiscarded(BaseTest):
 
         if self.discarded.get_row_count() == 0:
             pytest.skip("Nothing discarded in the seed data. Run 'make seed-demo'.")
-        # A restored row deliberately shows its OLD discarded number, so every row on this
-        # screen should carry the junk prefix, restored or not.
+        # Restored rows also show their old JNK- number.
         for reference in self.discarded.get_reference_numbers():
             assert reference.startswith("JNK-"), (
                 f"A discarded item should show a JNK- number, but showed: {reference}"
@@ -80,7 +55,7 @@ class TestDiscarded(BaseTest):
 
         hint = self.discarded.get_search_placeholder().lower()
         assert "sender" in hint and "subject" in hint, (
-            f"The search hint should tell the tester which fields are covered. Actual: {hint}"
+            f"The search hint should mention sender and subject. Actual: {hint}"
         )
 
     @pytest.mark.quarantine("unexplained-2026-09")
@@ -99,7 +74,7 @@ class TestDiscarded(BaseTest):
 
     # ---------- restoring ----------
 
-    def _first_restorable_row(self) -> int:
+    def _first_restorable_row(self):
         """The first row that has not already been restored."""
         for row in range(self.discarded.get_row_count()):
             if self.discarded.row_has_action_menu(row):
@@ -108,17 +83,8 @@ class TestDiscarded(BaseTest):
 
     @pytest.mark.regression
     def test_the_row_menu_offers_restoring_as_either_type(self):
-        """
-        Restoring must be a CHOICE, not an automatic guess. A discarded message could turn
-        out to be either an enquiry or a complaint, and only a person can tell which - so the
-        menu offers both, and neither happens by itself.
-
-        Signed in as the HEAD OF DEPARTMENT, not the supervisor: the Restore items are gated on
-        RECLASSIFY_TICKET_TYPE (app/tickets/discarded/page.tsx `canRestore={can(me,
-        RECLASSIFY_TICKET_TYPE)}`), held by HOD and CC Initiator only. The supervisor's menu is
-        correctly just "View details" - the first supervisor run (2026-09-30) failed on exactly
-        that. HOD rather than the CC Initiator because listing discarded rows opens no ticket.
-        """
+        """The row menu offers restoring as an Enquiry and as a Complaint."""
+        # Head of Department: the supervisor is not allowed to restore.
         self.open_discarded("hodEmail")
 
         row_to_use = self._first_restorable_row()
@@ -134,41 +100,23 @@ class TestDiscarded(BaseTest):
 
     @pytest.mark.regression
     def test_an_already_restored_row_stays_on_the_list_but_loses_its_actions(self):
-        """
-        A restored ticket stays on this list, badged "Restored", with NO action menu - and
-        every row that is still junk keeps its menu. The badge and the menu are two readings
-        of the same fact (DiscardedTicketListClient's isRestored), so they must agree on
-        every row.
-
-        WHAT THIS REPLACED: it looked for any row without a menu, then asserted that row had
-        no menu - the inner check restated the `if` and could not fail. It never tied the
-        menu-less row to the badged one, and "badged" meant the word "restored" appearing
-        anywhere in any row, subject lines included.
-        """
+        """Rows badged Restored have no action menu; every other row has one."""
         self.open_discarded()
 
-        restored = [
-            row
-            for row in range(self.discarded.get_row_count())
-            if self.discarded.row_is_badged_restored(row)
-        ]
+        restored = []
+        for row in range(self.discarded.get_row_count()):
+            if self.discarded.row_is_badged_restored(row):
+                restored.append(row)
         if not restored:
-            pytest.skip(
-                "No restored row on the first page of this list. "
-                "Run apps/api/scripts/seed_discard_restore_demo.py."
-            )
+            pytest.skip("No restored row on the first page. Run apps/api/scripts/seed_discard_restore_demo.py.")
 
         references = self.discarded.get_reference_numbers()
         for row in range(self.discarded.get_row_count()):
             if row in restored:
                 assert not self.discarded.row_has_action_menu(row), (
-                    f"{references[row]} is badged Restored, so it must not offer restoring again"
+                    f"{references[row]} is Restored, so it must not have an action menu"
                 )
             else:
                 assert self.discarded.row_has_action_menu(row), (
-                    f"{references[row]} is not restored, so it must keep its action menu - "
-                    "only a restored row loses it"
+                    f"{references[row]} is not restored, so it should have an action menu"
                 )
-
-    # ---------- who may see this queue at all ----------
-

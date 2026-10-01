@@ -1,35 +1,17 @@
 """
-The parent of every test class. It does three jobs:
+The parent of every test class.
 
-  1. opens the browser before the class and closes it after,
-  2. builds every page object ONCE, so a test never writes "SomethingPage(...)",
-  3. holds the handful of helpers every test needs - open(), login_as(), clear_session().
-
-A test class therefore starts like this and nothing else:
-
-    class TestSomething(BaseTest):
-        def test_something(self):
-            self.open("/")
-            ...
-
-If the class needs to be signed in for all of its tests, add the class-scoped hook:
+It holds the browser (opened/closed by conftest.py), builds every page object once, and
+has the helpers every test needs: open(), login_as(), clear_session(), and so on.
 
     class TestSomething(BaseTest):
         @pytest.fixture(scope="class", autouse=True)
-        def sign_in(self, browser):
-            self.login_as(self.get("agentEmail"))
+        def sign_in(self, request, browser):
+            request.cls.login_class(request.cls.get("agentEmail"))
 
-WHY IS THE BROWSER OPENED PER CLASS, NOT PER TEST?
-The sign-in endpoint is rate limited to 10 requests per minute per IP address. A fresh
-browser and a fresh login for every single test method would trip that limit part way
-through the run and produce failures that have nothing to do with the product. So each
-class opens one browser, signs in once, and each test navigates to the page it needs.
-
-The browser lifecycle itself lives in conftest.py as class- and function-scoped fixtures,
-which is how pytest expresses TestNG's @BeforeClass / @AfterClass / @BeforeMethod.
+        def test_something(self):
+            self.open("/")
 """
-
-from __future__ import annotations
 
 import re
 import time
@@ -60,27 +42,41 @@ from awnic_qa.pages.ticket_edit_page import TicketEditPage
 from awnic_qa.pages.ticket_list_page import TicketListPage
 from awnic_qa.pages.top_bar_page import TopBarPage
 
-#: A ticket id is a UUID. See wait_for_ticket_detail_url().
+# A ticket detail URL ends in the ticket's UUID.
 _TICKET_DETAIL_URL = re.compile(
     r".*/tickets/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 
+# The "you don't have access" panel shown by every protected screen.
+_ACCESS_DENIED = (
+    By.XPATH,
+    "//*[contains(normalize-space(.),\"You don't have access to\")"
+    " and not(.//*[contains(normalize-space(.),\"You don't have access to\")])]",
+)
+
+# The app's own "not found" screen (also shown for a ticket this user may not see).
+_PAGE_NOT_FOUND = (
+    By.XPATH,
+    "//h1[normalize-space()='Page not found' "
+    "or normalize-space()='Ticket not available']",
+)
+
 
 class SignInError(RuntimeError):
-    """The suite could not sign in. Carries the reason the page gave."""
+    """Could not sign in. The message says why."""
 
 
 class BaseTest:
-    # Set by the class-scoped `browser` fixture in conftest.py.
+    # Set by the `browser` fixture in conftest.py.
     driver = None
     wait = None
     base_url: str = ""
 
-    #: Whoever is signed in right now, so login_once can skip a needless round trip.
+    # Who is signed in right now (None = nobody).
     signed_in_as: str | None = None
 
-    # ---- page objects: created once, used by name in every test ----
+    # Page objects, built once per class by build_page_objects().
     login: LoginPage
     nav: SideNavPage
     top_bar: TopBarPage
@@ -98,12 +94,12 @@ class BaseTest:
     investigation: InvestigationPage
     customer_records: CustomerRecordsPage
 
-    # ==================================================================
-    # Wiring - called by the fixtures in conftest.py
-    # ==================================================================
+    # ------------------------------------------------------------------
+    # Setup - called from conftest.py
+    # ------------------------------------------------------------------
 
     @classmethod
-    def build_page_objects(cls) -> None:
+    def build_page_objects(cls):
         cls.login = LoginPage(cls.driver, cls.wait, cls.base_url)
         cls.nav = SideNavPage(cls.driver, cls.wait)
         cls.top_bar = TopBarPage(cls.driver, cls.wait)
@@ -122,208 +118,117 @@ class BaseTest:
         cls.customer_records = CustomerRecordsPage(cls.driver, cls.wait)
 
     @classmethod
-    def login_class(cls, email: str) -> None:
-        """
-        Signs in for a whole test class - the equivalent of TestNG's @BeforeClass sign-in.
-
-        Every piece of state this needs (driver, wait, page objects, signed_in_as) lives on
-        the CLASS, set there by the `browser` fixture, so a throwaway instance is enough to
-        reach the instance methods. A class-scoped pytest fixture has no test instance of its
-        own, which is why this exists rather than calling login_as directly.
-
-        Used as:
-            @pytest.fixture(scope="class", autouse=True)
-            def sign_in(self, request, browser):
-                request.cls.login_class(request.cls.get("agentEmail"))
-        """
+    def login_class(cls, email):
+        """Signs in once for the whole class (for use in a class-scoped fixture)."""
         cls().login_as(email)
 
-    # ==================================================================
+    # ------------------------------------------------------------------
     # Settings
-    # ==================================================================
+    # ------------------------------------------------------------------
 
     @staticmethod
-    def get(key: str) -> str:
-        """A value from config.properties, e.g. get("agentEmail")."""
+    def get(key):
+        """A value from the settings file, e.g. get("agentEmail")."""
         return Config.get(key)
 
     @staticmethod
-    def reference(prefix: str, tail: str) -> str:
-        """
-        A seeded reference number, e.g. reference("COM", "0001") -> "COM-2026-0001".
-
-        The seed script stamps the CURRENT year into every reference number, so writing
-        "COM-2026-0001" in a test would quietly start failing on 1 January.
-        """
+    def reference(prefix, tail):
+        """A seeded reference number with this year in it, e.g. "COM-2026-0001"."""
         return f"{prefix}-{date.today().year}-{tail}"
 
-    # ==================================================================
-    # Navigation and sign-in
-    # ==================================================================
+    # ------------------------------------------------------------------
+    # Navigation and waits
+    # ------------------------------------------------------------------
 
-    def open(self, path: str) -> None:
-        """Opens a page of the application, e.g. open("/tickets/enquiries")."""
+    def open(self, path):
+        """Opens a page of the app, e.g. open("/tickets/enquiries")."""
         self.driver.get(self.base_url + path)
 
-    def open_and_wait(self, path: str) -> None:
+    def open_and_wait(self, path):
         """
-        Opens a page and waits until it has actually finished arriving.
-
-        USE THIS, NOT open(), WHENEVER THE NEXT LINE ASKS "was I allowed in?". A plain open()
-        returns as soon as the browser starts loading, so checking for the access-denied panel
-        straight afterwards can read a page that has not rendered yet - and an empty page looks
-        exactly like "I was allowed in". That is a false pass on an access-control test, which
-        is the worst kind of green there is.
-
-        "Finished arriving" means one of: the access-denied panel is up, the not-found screen
-        is up, a heading has rendered, or we were redirected somewhere else entirely.
+        Opens a page and waits until something real is on screen: the access-denied panel,
+        the not-found screen, a redirect, or a heading/table/admin tile.
+        Use this before checking "was I allowed in?" - an empty page must not count as a pass.
         """
         self.open(path)
-        # First: the browser has finished loading. Without this, everything below can be
-        # asked of a page that has not arrived, and an empty page looks exactly like
-        # "I was allowed in" - a false pass on an access test, the worst kind of green.
         self.wait_for_page_load()
-        # Then: something recognisable is on screen. Note the admin dashboard has no <h1>
-        # at all - it is built from KPI tiles - so a heading alone is not enough to go on.
-        self.wait.until(
-            lambda d: self.is_access_denied()
-            or self.is_page_not_found()
-            or path not in d.current_url
-            or len(
-                d.find_elements(
-                    By.CSS_SELECTOR,
-                    "h1, h2, table, [data-testid^='admin-stat-'], [data-testid^='user-stat-']",
-                )
+
+        def page_arrived(driver):
+            if self.is_access_denied() or self.is_page_not_found():
+                return True
+            if path not in driver.current_url:
+                return True
+            content = driver.find_elements(
+                By.CSS_SELECTOR,
+                "h1, h2, table, [data-testid^='admin-stat-'], [data-testid^='user-stat-']",
             )
-            > 0
-        )
+            return len(content) > 0
 
-    def wait_for_page_load(self) -> None:
-        """
-        Waits only until the browser has finished loading - no assumption about WHAT arrived.
+        self.wait.until(page_arrived)
 
-        open_and_wait() is the one to reach for normally, because it also waits for something
-        recognisable to render. Use this one for the handful of tests whose whole point is
-        that a page did NOT render (a rejected query string, an error page), where waiting for
-        a heading or a table would time out on a perfectly correct result.
-        """
-        self.wait.until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
+    def wait_for_page_load(self):
+        """Waits until the browser says the page has finished loading."""
+        self.wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
 
-    def wait_for_page_content(self) -> None:
-        """
-        Waits until the route has actually RESOLVED - skeleton gone, real page rendered.
-
-        wait_for_page_load() only waits for document.readyState, which goes "complete" while
-        Next's route-level loading.tsx skeleton is still on screen. A test that asked "was I
-        refused?" at that moment read the skeleton and reported a data-isolation breach that
-        had not happened (2026-09-29); the server had answered 404 exactly as it should.
-
-        Waits on the skeleton's own signal (loading.tsx sets aria-busy="true") plus a real
-        heading, so it settles on EITHER outcome - the ticket, or the refusal - and never
-        assumes which one arrives. Use it wherever the point of the test is what the resolved
-        page says.
-        """
+    def wait_for_page_content(self):
+        """Waits until the loading skeleton is gone and a heading has rendered."""
         self.wait.until(
             lambda d: not d.find_elements(By.CSS_SELECTOR, "[aria-busy='true']")
             and d.find_elements(By.TAG_NAME, "h1")
         )
 
-    def page_text_snippet(self) -> str:
-        """
-        The first few hundred characters the page is showing.
+    def page_text_snippet(self):
+        """The first 400 characters of the page text, for failure messages."""
+        text = self.driver.find_element(By.TAG_NAME, "body").text.replace("\n", " | ").strip()
+        if len(text) > 400:
+            return text[:400] + "…"
+        return text
 
-        Only for failure messages. "The agent reached /user-management" is a frustrating thing
-        to read on its own; "...and the page said: You don't have access to User Management"
-        tells you immediately that the product is fine and the test is looking in the wrong
-        place.
-        """
-        text = (
-            self.driver.find_element(By.TAG_NAME, "body").text.replace("\n", " | ").strip()
-        )
-        return text[:400] + "…" if len(text) > 400 else text
-
-    def wait_for_ticket_detail_url(self) -> None:
-        """
-        Waits until a TICKET DETAIL page is open.
-
-        The obvious ".*/tickets/[^/]+$" is a trap: it also matches
-        "/tickets/complaints?search=COM-2026-0005", because the query string contains no
-        slash. A ticket id is a UUID, so match that instead - otherwise a test can believe it
-        opened a ticket while it is still sitting on the list.
-        """
+    def wait_for_ticket_detail_url(self):
+        """Waits until a ticket detail page (/tickets/<uuid>) is open."""
         self.wait.until(lambda d: _TICKET_DETAIL_URL.match(d.current_url) is not None)
 
-    def wait_for_url_containing(self, fragment: str) -> None:
-        """Waits until the address bar contains this text."""
+    def wait_for_url_containing(self, fragment):
         self.wait.until(EC.url_contains(fragment))
 
-    def wait_for_url(self, path: str) -> None:
-        """Waits until the address bar is exactly base_url + path."""
+    def wait_for_url(self, path):
+        """Waits until the URL is exactly base_url + path."""
         self.wait.until(lambda d: d.current_url == self.base_url + path)
 
-    def current_url(self) -> str:
+    def current_url(self):
         return self.driver.current_url
 
-    def login_as(self, email: str) -> None:
-        """
-        Signs in with the dev email login.
+    # ------------------------------------------------------------------
+    # Sign-in
+    # ------------------------------------------------------------------
 
-        The application has no password field - AWNIC One single sign-on is the real login,
-        and locally that is replaced by a form that takes an email only. Signs the previous
-        user out first, so one test class can move between roles.
+    def login_as(self, email):
+        """
+        Signs in with the email-only dev login (signs the previous user out first).
+        If the account does not exist and missingAccountsAreSkipped is true, skips the test.
         """
         try:
             self._login_or_retry_after_rate_limit(email)
-        except SignInError as cannot_sign_in:
-            # On a SHARED environment only a few of the eight roles have an account, so a
-            # test for one of the others should say "not available here" rather than shout
-            # that something is broken. On your own laptop every account is seeded, so this
-            # stays switched off and a failed sign-in is reported as the real problem it is.
-            #
-            # ONLY a genuinely missing account may skip. This used to skip on ANY sign-in
-            # failure, which meant a broken browser, a site that was down or a rate-limited
-            # endpoint all reported themselves as "no account here" - a quiet green-ish skip
-            # hiding a real problem. The API says exactly one sentence for a missing account
-            # ("No matching account for this email", app/auth/routes.py), so that sentence
-            # is what we look for; anything else is a failure and is reported as one.
-            if Config.get_bool("missingAccountsAreSkipped") and _looks_like_a_missing_account(
-                str(cannot_sign_in)
-            ):
+        except SignInError as error:
+            message = str(error).lower()
+            account_missing = "no matching account for this email" in message
+            if Config.get_bool("missingAccountsAreSkipped") and account_missing:
                 pytest.skip(
                     f"No usable account for {email} on this environment, so this test "
-                    f"cannot run here. ({cannot_sign_in})"
+                    f"cannot run here. ({error})"
                 )
             raise
         type(self).signed_in_as = email
 
-    def require_ticket_access(self, account_key: str | None = None) -> None:
+    def require_ticket_access(self, account_key=None):
         """
-        Skips the calling test when the signed-in account has been granted NO ROLE.
-
-        WHY THIS EXISTS - it turns twenty mystery failures into one clear sentence.
-
-        An account with no role in `user_roles` can sign in perfectly well and then see
-        nothing at all: every screen answers "You don't have access to ...". A test that
-        simply waited for the page heading then sat there for the full timeout and failed
-        with "waiting for visibility of element located by By.tagName: h1" - which says
-        nothing whatsoever about the real problem. That single cause produced most of the
-        red in the 2026-09-03 run.
-
-        On the shared environment as of 2026-09-04, FIVE of the seven test accounts were in
-        this state - supervisor, hod, complaints.manager, complaints.officer and compliance
-        all had zero rows in user_roles. (Re-checked 2026-09-30: the settings file now names
-        role-holding accounts for everything except compliance_officer, which has no holder.)
-
-        Call this straight after signing in, before opening the screen under test. With no
-        argument it asks about whoever is signed in right now.
+        Skips the test if the signed-in account has no role (every screen says "no access").
+        Call it straight after signing in.
         """
-        who = (
-            self.get(account_key)
-            if account_key is not None
-            else (self.signed_in_as or "(nobody)")
-        )
+        if account_key is not None:
+            who = self.get(account_key)
+        else:
+            who = self.signed_in_as or "(nobody)"
         self.open("/tickets/enquiries")
         self.wait_for_page_load()
         if self.is_access_denied():
@@ -334,15 +239,8 @@ class BaseTest:
                 "user_roles and this test will run."
             )
 
-    def require_write_tests(self) -> None:
-        """
-        Skips the calling test unless this environment allows writing.
-
-        Every test that CHANGES REAL DATA calls this first - creating a ticket, moving one
-        between board columns, marking somebody's notifications read. On a shared environment
-        they are switched off, so a routine run does not leave changes that other people
-        testing the same site would have to wonder about.
-        """
+    def require_write_tests(self):
+        """Skips the test unless writeTestsEnabled is true (the test changes real data)."""
         if not Config.get_bool("writeTestsEnabled"):
             pytest.skip(
                 "Write test disabled; enable writeTestsEnabled explicitly. This test changes "
@@ -350,68 +248,44 @@ class BaseTest:
                 "-D writeTestsEnabled=true to include it."
             )
 
-    def _login_or_retry_after_rate_limit(self, email: str) -> None:
+    def _login_or_retry_after_rate_limit(self, email):
+        """Signs in. If rate-limited (10 per minute), waits 65 seconds and tries once more."""
         try:
             self._attempt_login(email)
-        except SignInError as first_attempt:
-            # The sign-in endpoint allows only 10 requests a minute per computer. A suite
-            # with a dozen classes, each signing in, can genuinely hit that - and when it
-            # does, the failure has nothing to do with the product. Waiting out the minute
-            # and trying once more turns a confusing red run into a slightly slower green
-            # one. Anything that fails the SECOND time is a real problem and is reported.
-            if not _looks_like_rate_limiting(str(first_attempt)):
+        except SignInError as error:
+            message = str(error).lower()
+            rate_limited = "429" in message or "rate" in message or "too many" in message
+            if not rate_limited:
                 raise
             print("Sign-in was rate limited. Waiting a minute and trying once more.")
             time.sleep(65)
             self._attempt_login(email)
 
-    def _attempt_login(self, email: str) -> None:
+    def _attempt_login(self, email):
         self.clear_session()
         self.login.open()
         self.login.sign_in(email)
         try:
             self.wait.until_not(EC.url_contains("/login"))
         except TimeoutException as timeout:
-            # Say WHY the sign-in failed instead of a bare "timed out after 40 seconds".
-            reason = (
-                self.login.get_error_message()
-                if self.login.has_error_message()
-                else "no error shown"
-            )
+            if self.login.has_error_message():
+                reason = self.login.get_error_message()
+            else:
+                reason = "no error shown"
             raise SignInError(
                 f"Could not sign in as {email} - still on the login page. Page says: {reason}"
             ) from timeout
 
-    def login_once(self, email: str) -> None:
-        """
-        Signs in ONLY if somebody else (or nobody) is signed in.
-
-        RoleAccessTest walks through several accounts and checks a few things about each.
-        Calling login_as before every single check would be a login per assertion and would
-        hit the 10-per-minute rate limit half way through the class.
-        """
+    def login_once(self, email):
+        """Signs in only if this email is not already signed in (saves sign-in requests)."""
         if email != self.signed_in_as:
             self.login_as(email)
 
-    def clear_session(self) -> None:
+    def clear_session(self):
         """
-        Puts the browser back into a signed-out state.
-
-        TWO cookie deletes are needed, and this is a real quirk of the application:
-        access_token is stored on path "/", but refresh_token is stored on "/api/v1/auth".
-        Chrome only deletes cookies visible to the CURRENT page, so deleting from /login
-        alone leaves refresh_token behind - and the login page silently uses it to sign us
-        straight back in, which makes every "signed out" test pass while testing nothing.
-
-        So the delete happens on /api/v1/auth/me, where BOTH paths are visible, and never
-        on /login first. /login fires POST /auth/refresh the moment it mounts; while the
-        refresh cookie still exists that call succeeds, and its Set-Cookie can land AFTER
-        the delete, reviving the session and redirecting to "/" (reproduced 4/4 against
-        the deployed site on 2026-09-17). The auth/me URL is plain JSON - no page script,
-        no refresh call - so nothing can race the delete there.
-
-        login.open() then waits for the email box, which the login page only renders once
-        its own refresh call has FAILED - i.e. the server confirmed there is no session.
+        Signs the browser out by deleting all cookies.
+        Done on /api/v1/auth/me because only there are BOTH auth cookies visible
+        (refresh_token lives on /api/v1/auth), and that page cannot sign us back in.
         """
         self.driver.get(self.base_url + "/api/v1/auth/me")
         self.driver.delete_all_cookies()
@@ -419,101 +293,41 @@ class BaseTest:
         self.login.open()
         type(self).signed_in_as = None
 
-    # ==================================================================
-    # Shared checks - screens that look the same everywhere
-    # ==================================================================
+    # ------------------------------------------------------------------
+    # Shared checks
+    # ------------------------------------------------------------------
 
-    def is_access_denied(self) -> bool:
-        """
-        True when the current page is one of the shared "you don't have access" panels.
+    def is_access_denied(self):
+        """True when the page shows "You don't have access to ..."."""
+        return len(self.driver.find_elements(*_ACCESS_DENIED)) > 0
 
-        Twelve screens use the same sentence with only the module name changing (Dashboard,
-        Reports, Audit Trail, User Management, ...), so one matcher covers all of them.
-        Matching on the FIXED half of the sentence keeps it working when a module is added.
-        """
-        return (
-            len(
-                self.driver.find_elements(
-                    By.XPATH,
-                    "//*[contains(normalize-space(.),\"You don't have access to\")"
-                    " and not(.//*[contains(normalize-space(.),\"You don't have access to\")])]",
-                )
-            )
-            > 0
-        )
+    def is_page_not_found(self):
+        """True when the page shows "Page not found" or "Ticket not available"."""
+        return len(self.driver.find_elements(*_PAGE_NOT_FOUND)) > 0
 
-    def is_page_not_found(self) -> bool:
-        """
-        The application's own "you cannot have this" screen - NOT the stock Next.js 404.
+    # ------------------------------------------------------------------
+    # Kanban
+    # ------------------------------------------------------------------
 
-        There are TWO wordings and both count:
-          "Page not found"        a URL that matches no route at all
-          "Ticket not available"  a ticket that either does not exist OR that this user may
-                                  not see. The wording is deliberately the same for both, so
-                                  nobody can work out which tickets exist by probing ids.
-        """
-        return (
-            len(
-                self.driver.find_elements(
-                    By.XPATH,
-                    "//h1[normalize-space()='Page not found' "
-                    "or normalize-space()='Ticket not available']",
-                )
-            )
-            > 0
-        )
-
-    # ==================================================================
-    # Kanban drag
-    # ==================================================================
-
-    def drag_card(self, card, target_column) -> None:
+    def drag_card(self, card, target_column):
         """
         Drags a Kanban card onto a column.
-
-        WHY NOT ActionChains.drag_and_drop(card, column)?
-        That convenience method speaks the LEGACY HTML5 drag protocol (dragstart / dragover /
-        drop). The board is built on a library called dnd-kit, which listens to POINTER
-        events instead (pointerdown / pointermove / pointerup). The two never meet: the card
-        simply does not move, and the test fails for a reason that has nothing to do with the
-        product.
-
-        The sequence below is what dnd-kit actually needs: press, a small move to get past its
-        5-pixel "is this a drag or a click?" threshold, then moves into the target so it
-        registers a hover, then release. One big jump straight into the target is often not
-        seen at all.
-
-        Always assert on the OUTCOME afterwards (column counts, the ticket's status), never on
-        the animation - the animation is not a behaviour anybody specified.
+        The board uses pointer events, so drag_and_drop() does not work; move in small steps.
         """
-        (
-            ActionChains(self.driver)
-            .move_to_element(card)
-            .click_and_hold()
-            .move_by_offset(8, 0)  # get past dnd-kit's activation distance
-            .move_to_element(target_column)
-            .move_by_offset(0, 10)  # a second move inside the target
-            .pause(0.25)
-            .release()
-            .perform()
-        )
+        actions = ActionChains(self.driver)
+        actions.move_to_element(card)
+        actions.click_and_hold()
+        actions.move_by_offset(8, 0)  # small first move so it counts as a drag, not a click
+        actions.move_to_element(target_column)
+        actions.move_by_offset(0, 10)  # a second move inside the target
+        actions.pause(0.25)
+        actions.release()
+        actions.perform()
 
-    def open_an_open_ticket_from(self, list_path: str) -> None:
+    def open_an_open_ticket_from(self, list_path):
         """
-        Opens a ticket that is still OPEN, and fails loudly rather than quietly picking a
-        finished one.
-
-        WHY THIS EXISTS. The entire action header - More Action, Change Status, the reply
-        composer - is REMOVED from a Resolved or Closed ticket (`if (isClosed) return null` in
-        TicketHeaderActions). That is correct: there is nothing left to do to a finished
-        ticket. But it means any test that opens "the first row in the list" can land on a
-        Resolved one and read "no actions" as "this role is not allowed", which is a false
-        failure about permissions on a ticket where nobody has any. Three classes have now
-        been caught by it.
-
-        The board is the reliable source: New and In Progress are open by definition (Resolved
-        is its own column and Closed is off the board entirely), so a card from either still
-        has its actions.
+        Opens a ticket that is still open (New or In Progress) from the Kanban board.
+        Resolved/Closed tickets have no action buttons, so they must not be picked.
         """
         self.open(list_path)
         self.list.wait_until_loaded()
@@ -525,11 +339,10 @@ class BaseTest:
         self.list.switch_to_kanban()
         self.kanban.wait_until_loaded()
 
-        column = (
-            KanbanPage.IN_PROGRESS
-            if self.kanban.card_count(KanbanPage.IN_PROGRESS) > 0
-            else KanbanPage.NEW
-        )
+        if self.kanban.card_count(KanbanPage.IN_PROGRESS) > 0:
+            column = KanbanPage.IN_PROGRESS
+        else:
+            column = KanbanPage.NEW
         if self.kanban.card_count(column) == 0:
             pytest.skip(
                 f"No open (New or In Progress) ticket is visible at {list_path}, so there "
@@ -539,23 +352,6 @@ class BaseTest:
         self.wait_for_ticket_detail_url()
         self.detail.wait_until_loaded()
 
-    def press_escape(self) -> None:
-        """Presses Escape - cancels a drag, closes a menu, closes a modal."""
+    def press_escape(self):
+        """Presses Escape - closes a menu or modal, cancels a drag."""
         ActionChains(self.driver).send_keys(Keys.ESCAPE).perform()
-
-
-def _looks_like_a_missing_account(message: str | None) -> bool:
-    """
-    True only for the API's own "this email has no account" answer.
-
-    Deliberately narrow. Everything else - a dead browser, a site that is down, a rate
-    limit - must fail rather than skip, because a skip reads as "nothing to see here".
-    """
-    return message is not None and "no matching account for this email" in message.lower()
-
-
-def _looks_like_rate_limiting(message: str | None) -> bool:
-    if message is None:
-        return False
-    lower = message.lower()
-    return "429" in lower or "rate" in lower or "too many" in lower

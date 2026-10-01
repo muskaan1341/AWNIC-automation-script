@@ -1,16 +1,11 @@
 """
-The Discarded Tickets queue (/tickets/discarded).
+The Discarded Tickets list - /tickets/discarded.
 
-This is a DIFFERENT table from the Enquiries / Complaints list, with only five columns of
-its own, so it gets its own page object. Reusing TicketListPage's 18-column expectations
-here is the commonest way to fail this screen for the wrong reason.
+It has its own five columns, so it has its own page object (not TicketListPage).
 
-A RESTORED ticket STAYS on this list for the record, badged "Restored", with its restore
-action removed. So a non-empty list does not mean everything on it is still junk - and a
-restored row deliberately shows the number it was DISCARDED under, not its new one.
+A restored ticket stays on this list with a "Restored" badge and no action menu, and it
+still shows the number it was discarded under.
 """
-
-from __future__ import annotations
 
 from selenium.webdriver.common.by import By
 
@@ -18,7 +13,7 @@ from awnic_qa.pages.base_page import BasePage
 
 
 class DiscardedListPage(BasePage):
-    #: The columns this screen renders - deliberately NOT the ticket list's set.
+    # The columns this list shows.
     EXPECTED_COLUMNS = [
         "Reference number",
         "Sender",
@@ -36,33 +31,26 @@ class DiscardedListPage(BasePage):
         "//button[contains(normalize-space(),'AI Confidence')]",
     )
 
-    # ==================================================================
-    # Actions
-    # ==================================================================
+    # ---------------- Actions ----------------
 
-    def wait_until_loaded(self) -> None:
+    def wait_until_loaded(self):
         self.wait_visible(self.HEADING)
         self.wait.until(lambda d: self.exists((By.TAG_NAME, "table")))
 
-    def search(self, text: str) -> None:
+    def search(self, text):
         self.type_into(self.SEARCH_INPUT, text)
 
-    def open_confidence_filter(self) -> None:
+    def open_confidence_filter(self):
         self.click(self.CONFIDENCE_FILTER)
 
-    def select_confidence(self, level: str) -> None:
+    def select_confidence(self, level):
         self.open_confidence_filter()
         self.click_button(level)
 
-    def open_row_menu(self, row_index: int) -> None:
+    def open_row_menu(self, row_index):
         """
-        Opens a row's action menu, which is where "Restore as …" lives.
-
-        Through the shared click() rather than element.click(): the button sits at the right
-        edge of the table, under the notification toast stack, and a raw click was refused
-        ("Other element would receive the click: <p ... break-words pr-4>", the toast body) as
-        soon as an account with unread notifications (the HOD, 2026-09-30) used this list.
-        click() waits the toasts out and retries, exactly as it does for every other control.
+        Opens a row's action menu (where "Restore as ..." is). Uses self.click() because
+        notification toasts can cover the button.
         """
         self.click(
             (
@@ -71,8 +59,8 @@ class DiscardedListPage(BasePage):
             )
         )
 
-    def click_restore_as(self, reference_type: str) -> None:
-        """Picks "Restore as Enquiry" / "Restore as Complaint" from an open row menu."""
+    def click_restore_as(self, reference_type):
+        """Clicks "Restore as Enquiry" / "Restore as Complaint" in the open row menu."""
         self.click(
             (
                 By.XPATH,
@@ -80,77 +68,72 @@ class DiscardedListPage(BasePage):
             )
         )
 
-    def wait_for_row_count(self, expected: int) -> None:
+    def wait_for_row_count(self, expected):
         self.wait_for_count(self.TABLE_ROWS, expected)
 
-    # ==================================================================
-    # Checks
-    # ==================================================================
+    # ---------------- Checks ----------------
 
-    def get_heading(self) -> str:
+    def get_heading(self):
         return self.wait_visible(self.HEADING).text
 
-    def get_row_count(self) -> int:
+    def get_row_count(self):
         return self.count(self.TABLE_ROWS)
 
-    def get_column_headers(self) -> list[str]:
-        return [header for header in self.texts_of(self.COLUMN_HEADERS) if header]
+    def get_column_headers(self):
+        headers = []
+        for header in self.texts_of(self.COLUMN_HEADERS):
+            if header:
+                headers.append(header)
+        return headers
 
-    def get_reference_numbers(self) -> list[str]:
-        """The reference number in each row (the FIRST column on this screen)."""
-        numbers: list[str] = []
+    def get_reference_numbers(self):
+        """The reference number on each row (the FIRST column on this list)."""
+        numbers = []
         for row in self.driver.find_elements(*self.TABLE_ROWS):
             cells = row.find_elements(By.TAG_NAME, "td")
             if cells:
                 numbers.append(cells[0].text.strip().split("\n")[0].strip())
         return numbers
 
-    def get_search_placeholder(self) -> str:
-        """The search hint - it tells the tester which fields the search actually covers."""
+    def get_search_placeholder(self):
+        """The search box's hint text."""
         return self.driver.find_element(*self.SEARCH_INPUT).get_attribute("placeholder")
 
-    def any_row_is_badged_restored(self) -> bool:
-        return any(
-            "restored" in row.text.lower()
-            for row in self.driver.find_elements(*self.TABLE_ROWS)
-        )
+    def any_row_is_badged_restored(self):
+        """True if the word "restored" appears in any row."""
+        for row in self.driver.find_elements(*self.TABLE_ROWS):
+            if "restored" in row.text.lower():
+                return True
+        return False
 
-    def row_is_badged_restored(self, row_index: int) -> bool:
-        """
-        True when THIS row carries the "Restored" badge beside its reference number.
+    def row_is_badged_restored(self, row_index):
+        """True when this row's reference cell has the "Restored" badge."""
+        row = self.driver.find_elements(*self.TABLE_ROWS)[row_index]
+        cells = row.find_elements(By.TAG_NAME, "td")
+        if not cells:
+            return False
+        badges = cells[0].find_elements(By.XPATH, ".//span[normalize-space()='Restored']")
+        return bool(badges)
 
-        any_row_is_badged_restored() matches the word anywhere in any row - a subject line or
-        discard reason containing "restored" satisfies it. This reads the badge itself: a
-        <span> reading exactly "Restored" in the reference cell, which
-        DiscardedTicketListClient renders only when the ticket has left the Discarded type.
-        """
-        cells = self.driver.find_elements(*self.TABLE_ROWS)[row_index].find_elements(
-            By.TAG_NAME, "td"
-        )
-        return bool(cells) and bool(
-            cells[0].find_elements(By.XPATH, ".//span[normalize-space()='Restored']")
-        )
+    def row_has_action_menu(self, row_index):
+        """A restored row has no action menu."""
+        row = self.driver.find_elements(*self.TABLE_ROWS)[row_index]
+        menu_buttons = row.find_elements(By.CSS_SELECTOR, "button[aria-label='Row actions']")
+        return len(menu_buttons) > 0
 
-    def row_has_action_menu(self, row_index: int) -> bool:
-        """A restored row has no action menu at all, because restoring no longer applies."""
-        return (
-            len(
-                self.driver.find_elements(*self.TABLE_ROWS)[row_index].find_elements(
-                    By.CSS_SELECTOR, "button[aria-label='Row actions']"
-                )
-            )
-            > 0
-        )
-
-    def get_open_menu_labels(self) -> list[str]:
-        """The options offered inside an open row menu, e.g. "Restore as Enquiry"."""
+    def get_open_menu_labels(self):
+        """The options in the open row menu, e.g. "Restore as Enquiry"."""
         found = self.texts_of(
             (
                 By.CSS_SELECTOR,
                 "[role='menu'] [role='menuitem'], [role='menu'] button",
             )
         )
-        return [text for text in found if text]
+        labels = []
+        for text in found:
+            if text:
+                labels.append(text)
+        return labels
 
-    def is_empty_state_displayed(self) -> bool:
+    def is_empty_state_displayed(self):
         return self.exists((By.XPATH, "//td[contains(normalize-space(.),'No ')]"))
